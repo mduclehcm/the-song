@@ -4,6 +4,7 @@ import WhySection from "@/components/home/WhySection";
 import TerminalLayout from "@/components/layout/TerminalLayout";
 import FooterSection from "@/components/home/FooterSection";
 import { motion } from "framer-motion";
+import Header from "@/components/share/header";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -30,6 +31,7 @@ const itemVariants = {
 export default function Home() {
   return (
     <TerminalLayout>
+      <Header />
       <motion.main
         className="z-10 flex flex-col gap-6  max-w-lg mx-auto w-full pt-10"
         variants={containerVariants}

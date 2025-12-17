@@ -1,16 +1,15 @@
-use axum::{routing::get, Router};
+use axum::Router;
 use tower_http::{
     cors::{Any, CorsLayer},
     trace::TraceLayer,
 };
 
-use crate::handlers;
-use crate::ws;
+use crate::{state::AppState, ws};
 
-pub fn create_router() -> Router {
+pub fn create_router(state: AppState) -> Router {
     Router::new()
-        .route("/hello", get(handlers::root))
-        .route("/ws", get(ws::ws_handler))
+        .route("/ws", axum::routing::get(ws::ws_handler))
+        .with_state(state)
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any))
 }

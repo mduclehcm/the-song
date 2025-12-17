@@ -1,5 +1,7 @@
+mod dto;
 mod handlers;
 mod routes;
+mod state;
 mod ws;
 
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -15,8 +17,11 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    // Create shared app state
+    let app_state = state::AppState::new();
+
     // Build the router
-    let app = routes::create_router();
+    let app = routes::create_router(app_state);
 
     // Run the server
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();

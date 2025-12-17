@@ -1,13 +1,25 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Home from "./pages/Home";
-import Editor from "./pages/Editor";
+import { useEffect } from "react";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+
+import Home from "@/pages/Home";
+import { useWebSocketStore } from "@/store/store";
+import Editor from "@/pages/Editor";
+import { WS_CONNECT_DELAY } from "@/config";
 
 function App() {
+  const init = useWebSocketStore((state) => state.init);
+
+  useEffect(() => {
+    setTimeout(() => {
+      init();
+    }, WS_CONNECT_DELAY);
+  }, [init]);
+
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/editor" element={<Editor />} />
+        <Route path="/" Component={Home} />
+        <Route path="/editor" Component={Editor} />
       </Routes>
     </BrowserRouter>
   );

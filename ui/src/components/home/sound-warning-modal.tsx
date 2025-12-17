@@ -55,7 +55,7 @@ export default function SoundWarningModal({
         </Card>
 
         {/* Actions */}
-        <DialogFooter className="flex gap-3 sm:flex-row">
+        <DialogFooter className="flex gap-3">
           <Button
             className="flex-1"
             onClick={onCancel}

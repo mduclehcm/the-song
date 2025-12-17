@@ -48,7 +48,7 @@
   --muted: #141414;
   --muted-foreground: #666666;
   --border: #2a2a2a;
-  --ring: var(--accent);
+  --ring: #fafafa;
 }
 
 @layer base {

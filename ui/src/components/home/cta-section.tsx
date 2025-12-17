@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
-import SoundWarningModal from "./SoundWarningModal";
+import SoundWarningModal from "./sound-warning-modal";
 
 export default function CtaSection() {
   const navigate = useNavigate();

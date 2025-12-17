@@ -1,8 +1,8 @@
-import CtaSection from "@/components/home/CtaSection";
-import TitleSection from "@/components/home/TitleSection";
-import WhySection from "@/components/home/WhySection";
-import TerminalLayout from "@/components/layout/TerminalLayout";
-import FooterSection from "@/components/home/FooterSection";
+import CtaSection from "@/components/home/cta-section";
+import TitleSection from "@/components/home/title-section";
+import WhySection from "@/components/home/why-section";
+import TerminalLayout from "@/components/layout/terminal-layout";
+import FooterSection from "@/components/home/footer-section";
 import { motion } from "framer-motion";
 import Header from "@/components/share/header";
 
@@ -33,7 +33,7 @@ export default function Home() {
     <TerminalLayout>
       <Header />
       <motion.main
-        className="z-10 flex flex-col gap-6  max-w-lg mx-auto w-full pt-10"
+        className="z-10 flex flex-col gap-6  max-w-lg mx-auto w-full pt-10 px-6"
         variants={containerVariants}
         initial="hidden"
         animate="visible"

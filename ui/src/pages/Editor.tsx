@@ -1,5 +1,5 @@
 import EditorHeader from "@/components/share/header";
-import EditorPlaceholder from "@/components/editor/EditorPlaceholder";
+import EditorPlaceholder from "@/components/editor/editor-placeholder";
 
 export default function Editor() {
   return (

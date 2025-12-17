@@ -2,6 +2,7 @@ mod dto;
 mod handlers;
 mod routes;
 mod state;
+mod tasks;
 mod ws;
 
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};

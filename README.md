@@ -9,7 +9,5 @@ Welcome to the ultimate experiment in musical chaos.
 - 🎹 **To make noise:** Because the internet isn't loud enough yet.
 - 🤝 **To prove a point:** That humans can cooperate (or at least hit the same notes eventually).
 - 🤪 **For the chaos:** Stress-testing my patience and my home server in one go.
-- 🎩 **The secret reason:** It’s technically a job interview assignment, but let's just call it "Art".
+- 🎩 **The secret reason:** It's technically a job interview assignment, but let's just call it "Art".
 
----
-*No servers were harmed in the making of this cacophony (yet).*

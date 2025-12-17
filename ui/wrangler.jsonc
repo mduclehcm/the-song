@@ -1,0 +1,12 @@
+{
+  // Worker name used by your Cloudflare project
+  "name": "the-song",
+
+  // Required by Cloudflare Workers
+  "compatibility_date": "2025-12-17",
+
+  // Folder containing your static built assets
+  "assets": {
+    "directory": "./dist"
+  }
+}

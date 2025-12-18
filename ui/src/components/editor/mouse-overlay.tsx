@@ -80,12 +80,8 @@ export default function MouseOverlay() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    let lastTime = Date.now();
-
     const animate = () => {
       const now = Date.now();
-      const dt = (now - lastTime) / 1000;
-      lastTime = now;
 
       // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);

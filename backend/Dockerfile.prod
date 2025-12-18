@@ -1,7 +1,7 @@
 # ============================================
 # Stage 1: Chef - Prepare recipe for dependency caching
 # ============================================
-FROM rust:1.90-slim-bookworm AS chef
+FROM --platform=$BUILDPLATFORM rust:1.90-slim-bookworm AS chef
 
 # Install cargo-chef for better dependency caching
 RUN cargo install cargo-chef
@@ -23,6 +23,10 @@ RUN cargo chef prepare --recipe-path recipe.json
 # Stage 3: Builder - Build dependencies and app
 # ============================================
 FROM chef AS builder
+
+# Build arguments for cross-compilation
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
 
 # Install necessary build dependencies
 RUN apt-get update && \

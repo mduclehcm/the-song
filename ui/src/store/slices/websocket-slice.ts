@@ -15,16 +15,12 @@ export interface WebSocketSlice {
 
 // Type for the store update function
 type StoreSetFunction = (partial: any) => void;
-type StoreGetFunction = () => any;
 
 // Track if subscriptions have been set up
 let subscriptionsInitialized = false;
 
 // Setup WebSocket event subscriptions
-const setupWebSocketSubscriptions = (
-  set: StoreSetFunction,
-  get: StoreGetFunction
-) => {
+const setupWebSocketSubscriptions = (set: StoreSetFunction) => {
   if (subscriptionsInitialized) {
     console.log("[Store] WebSocket subscriptions already initialized");
     return;
@@ -91,7 +87,7 @@ export const createWebSocketSlice: StateCreator<
 
   init: () => {
     // Setup subscriptions on first init
-    setupWebSocketSubscriptions(set, get);
+    setupWebSocketSubscriptions(set);
 
     const currentStatus = get().status;
     if (

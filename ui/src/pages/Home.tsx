@@ -1,6 +1,4 @@
 import { motion } from "framer-motion";
-import { ArrowLeft } from "lucide-react";
-import { Link } from "react-router-dom";
 
 import CtaSection from "@/components/home/cta-section";
 import FooterSection from "@/components/home/footer-section";
@@ -9,7 +7,6 @@ import WhySection from "@/components/home/why-section";
 import TerminalLayout from "@/components/layout/terminal-layout";
 import Header from "@/components/share/header";
 import OnlineUser from "@/components/share/online-user";
-import { Button } from "@/components/ui/button";
 
 const containerVariants = {
   hidden: { opacity: 0 },

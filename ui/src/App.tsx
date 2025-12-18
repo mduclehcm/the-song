@@ -1,10 +1,11 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import Home from "@/pages/home";
 import { useStore } from "@/store/store";
-import Editor from "@/pages/editor";
 import { WS_CONNECT_DELAY } from "@/config";
+
+const Editor = lazy(() => import("@/pages/editor"));
 
 function App() {
   const init = useStore((state) => state.init);
@@ -15,12 +16,27 @@ function App() {
     }, WS_CONNECT_DELAY);
   }, [init]);
 
+  useEffect(() => {
+    // preload the editor
+    setTimeout(() => {
+      import("@/pages/editor");
+    }, 100);
+  }, []);
+
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" Component={Home} />
-        <Route path="/editor" Component={Editor} />
-      </Routes>
+      <Suspense
+        fallback={
+          <div className="min-h-screen bg-background flex items-center justify-center">
+            Loading...
+          </div>
+        }
+      >
+        <Routes>
+          <Route path="/" Component={Home} />
+          <Route path="/editor" Component={Editor} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

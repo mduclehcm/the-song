@@ -1,31 +1,68 @@
-use axum::extract::ws::{Message, WebSocket};
-use futures::{stream::SplitSink, SinkExt};
+use axum::extract::ws::Message;
 use tokio::time::{interval, Duration};
 
-use crate::{dto::ServerStatsMessage, state::AppState};
+use crate::{
+    dto::{ServerMessage, ServerMousePositionsMessage, ServerStatsMessage},
+    state::AppState,
+};
 
-pub async fn send_stats_task(mut sender: SplitSink<WebSocket, Message>, state: AppState) {
-    let mut interval = interval(Duration::from_millis(500));
+/// Global task that broadcasts server stats to all connected clients
+pub async fn global_stats_broadcast_task(state: AppState) {
+    let mut interval = interval(Duration::from_millis(1000));
 
-    let mut last_stats = None;
     loop {
         interval.tick().await;
 
-        let server_stats = state.get_server_stats();
-        if last_stats.as_ref() == Some(&server_stats) {
+        // Check if there are any connections before broadcasting
+        let connection_count = state.connection_count().await;
+        if connection_count == 0 {
             continue;
         }
-        last_stats = Some(server_stats.clone());
-        let response = ServerStatsMessage::new(server_stats);
-        if sender
-            .send(Message::Text(
-                serde_json::to_string(&response).unwrap().into(),
-            ))
-            .await
-            .is_err()
-        {
-            tracing::debug!("Failed to send stats, connection likely closed");
-            break;
+
+        let server_stats = state.get_server_stats();
+        let response = ServerMessage::Stats(ServerStatsMessage {
+            stats: server_stats,
+        });
+
+        match serde_json::to_string(&response) {
+            Ok(json) => {
+                state.broadcast(Message::Text(json.into())).await;
+                tracing::trace!("Broadcasted stats to {} connections", connection_count);
+            }
+            Err(e) => {
+                tracing::error!("Failed to serialize stats: {}", e);
+            }
+        }
+    }
+}
+
+/// Global task that broadcasts mouse positions to all connected clients
+pub async fn global_mouse_broadcast_task(state: AppState) {
+    let mut interval = interval(Duration::from_millis(100));
+
+    loop {
+        interval.tick().await;
+
+        let positions = state.get_dirty_mouse_positions().await;
+        if positions.is_empty() {
+            continue;
+        }
+
+        let positions_count = positions.keys().len();
+
+        let response = ServerMessage::MousePositions(ServerMousePositionsMessage { positions });
+
+        match serde_json::to_string(&response) {
+            Ok(json) => {
+                state.broadcast(Message::Text(json.into())).await;
+                tracing::trace!(
+                    "Broadcasted {} mouse positions to all connections",
+                    positions_count
+                );
+            }
+            Err(e) => {
+                tracing::error!("Failed to serialize mouse positions: {}", e);
+            }
         }
     }
 }

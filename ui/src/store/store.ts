@@ -1,86 +1,75 @@
 import { create } from "zustand";
-import { WS_CLIENT, WsStatus } from "@/lib/websocket";
-import type { ServerMessage } from "@/types/server";
-import type { ServerStats } from "@/types/data";
+import { useShallow } from "zustand/react/shallow";
+import {
+  createWebSocketSlice,
+  type WebSocketSlice,
+} from "./slices/websocket-slice";
+import { createUserSlice, type UserSlice } from "./slices/user-slice";
+import { createServerSlice, type ServerSlice } from "./slices/server-slice";
+import { createMouseSlice, type MouseSlice } from "./slices/mouse-slice";
+import {
+  createSynthesizedSlice,
+  type SynthesizedSlice,
+} from "./slices/synthesized-slice";
 
-interface WebSocketState {
-  // State
-  status: WsStatus;
-  serverStats: ServerStats;
+type StoreState = WebSocketSlice &
+  UserSlice &
+  ServerSlice &
+  MouseSlice &
+  SynthesizedSlice;
 
-  // Actions
-  init: () => void;
-  disconnect: () => void;
-  send: (message: string) => void;
-}
+export const useStore = create<StoreState>((...a) => ({
+  ...createWebSocketSlice(...a),
+  ...createUserSlice(...a),
+  ...createServerSlice(...a),
+  ...createMouseSlice(...a),
+  ...createSynthesizedSlice(...a),
+}));
 
-export const useWebSocketStore = create<WebSocketState>((set, get) => {
-  // Subscribe to WebSocket events
-  WS_CLIENT.on("connected", () => {
-    console.log("[Store] WebSocket connected");
-    set({ status: WsStatus.Connected });
-  });
+// Export individual slice hooks for better tree-shaking and performance
+export const useWebSocketStatus = () => useStore((state) => state.status);
+export const useWebSocketActions = () =>
+  useStore(
+    useShallow((state) => ({
+      init: state.init,
+      disconnect: state.disconnect,
+      send: state.send,
+    }))
+  );
 
-  WS_CLIENT.on("disconnected", () => {
-    console.log("[Store] WebSocket disconnected");
-    set((state) => ({ ...state, status: WsStatus.Disconnected }));
-  });
+export const useUserId = () => useStore((state) => state.userId);
+export const useUserActions = () =>
+  useStore(
+    useShallow((state) => ({
+      setUserId: state.setUserId,
+      clearUserId: state.clearUserId,
+    }))
+  );
 
-  WS_CLIENT.on("reconnecting", () => {
-    console.log("[Store] WebSocket reconnecting");
-    set((state) => ({ ...state, status: WsStatus.Reconnecting }));
-  });
+export const useServerStats = () => useStore((state) => state.serverStats);
+export const useServerActions = () =>
+  useStore(
+    useShallow((state) => ({
+      setServerStats: state.setServerStats,
+    }))
+  );
 
-  WS_CLIENT.on("message", (event) => {
-    if (event.name !== "message") {
-      return;
-    }
-    console.log("[Store] WebSocket message received:", event.data);
-    try {
-      const message: ServerMessage = JSON.parse(event.data);
+export const useMousePositions = () =>
+  useStore((state) => state.mousePositions);
+export const useMouseActions = () =>
+  useStore(
+    useShallow((state) => ({
+      setMousePositions: state.setMousePositions,
+      updateMousePositions: state.updateMousePositions,
+      sendMouseUpdate: state.sendMouseUpdate,
+    }))
+  );
 
-      if (message.kind === "stats") {
-        set((state) => ({ ...state, serverStats: message.stats }));
-      }
-    } catch (error) {
-      console.error("[Store] Failed to parse server message:", error);
-    }
-  });
-
-  return {
-    // Initial state
-    status: WsStatus.Initial,
-    serverStats: {
-      online_users: 0,
-    },
-
-    // Actions
-    init: () => {
-      const currentStatus = get().status;
-      if (
-        currentStatus === WsStatus.Initial ||
-        currentStatus === WsStatus.Disconnected
-      ) {
-        console.log("[Store] Initializing WebSocket connection");
-        set({ status: WsStatus.Connecting });
-        WS_CLIENT.connect();
-        return;
-      }
-      console.log("[Store] Already connected or connecting");
-    },
-
-    disconnect: () => {
-      console.log("[Store] Disconnecting WebSocket");
-      WS_CLIENT.disconnect();
-    },
-
-    send: (message: string) => {
-      const currentStatus = get().status;
-      if (currentStatus !== "connected") {
-        console.warn("[Store] Cannot send message - not connected");
-        return;
-      }
-      WS_CLIENT.send(message);
-    },
-  };
-});
+export const useBpm = () => useStore((state) => state.bpm);
+export const useSynthesizedActions = () =>
+  useStore(
+    useShallow((state) => ({
+      incrementBpm: state.incrementBpm,
+      decrementBpm: state.decrementBpm,
+    }))
+  );

@@ -1,13 +1,11 @@
 import { WsStatus } from "@/lib/websocket";
 import { cn } from "@/lib/utils";
-import { useWebSocketStore } from "@/store/store";
+import { useStore } from "@/store/store";
 import { useMemo } from "react";
 
 export default function OnlineUser() {
-  const status = useWebSocketStore((state) => state.status);
-  const onlineUsers = useWebSocketStore(
-    (state) => state.serverStats?.online_users
-  );
+  const status = useStore((state) => state.status);
+  const onlineUsers = useStore((state) => state.serverStats?.online_users);
 
   const text = () => {
     if (status === WsStatus.Connected) {

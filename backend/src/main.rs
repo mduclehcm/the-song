@@ -21,6 +21,11 @@ async fn main() {
     // Create shared app state
     let app_state = state::AppState::new();
 
+    // Spawn global broadcast tasks
+    tracing::info!("Starting global broadcast tasks");
+    tokio::spawn(tasks::global_stats_broadcast_task(app_state.clone()));
+    tokio::spawn(tasks::global_mouse_broadcast_task(app_state.clone()));
+
     // Build the router
     let app = routes::create_router(app_state);
 

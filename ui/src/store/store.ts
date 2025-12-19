@@ -45,6 +45,7 @@ export const useUserActions = () =>
       clearUserId: state.clearUserId,
     }))
   );
+export const getUserId = () => useStore.getState().userId;
 
 export const useServerStats = () => useStore((state) => state.serverStats);
 export const useServerActions = () =>
@@ -66,10 +67,20 @@ export const useMouseActions = () =>
   );
 
 export const useBpm = () => useStore((state) => state.bpm);
+export const useActiveChannel = () => useStore((state) => state.activeChannel);
+export const useCrdt = () => useStore((state) => state.crdt);
 export const useSynthesizedActions = () =>
   useStore(
     useShallow((state) => ({
       incrementBpm: state.incrementBpm,
       decrementBpm: state.decrementBpm,
+      setActiveChannel: state.setActiveChannel,
+    }))
+  );
+export const useNotesActions = () =>
+  useStore(
+    useShallow((state) => ({
+      updateNote: state.updateNote,
+      deleteNote: state.deleteNote,
     }))
   );

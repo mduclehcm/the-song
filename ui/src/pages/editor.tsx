@@ -1,38 +1,65 @@
-import { ArrowLeft } from "lucide-react";
-import { Link } from "react-router-dom";
-
-import EditorPlaceholder from "@/components/editor/editor-placeholder";
+import { useState } from "react";
+import ChannelList from "@/components/editor/channel-list";
+import EditorToolbar from "@/components/editor/editor-toolbar";
+import PianoRollEditor from "@/components/editor/piano-roll";
 import Header from "@/components/share/header";
 import OnlineUser from "@/components/share/online-user";
-import { Button } from "@/components/ui/button";
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import EditorToolbar from "@/components/editor/editor-toolbar";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
+import { Button } from "@/components/ui/button";
+import { Menu } from "lucide-react";
+import { useResponsiveHook } from "@/hooks/useResponsive";
 
 export default function Editor() {
+  const isMobile = useResponsiveHook(900);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
   return (
-    <div className="min-h-screen bg-background text-foreground font-mono flex flex-col">
+    <div className="h-screen bg-background text-foreground font-mono flex flex-col">
       <Header>
-        <Button variant="link" asChild>
-          <Link to="/">
-            <ArrowLeft className="size-4" />
-            <span>BACK</span>
-          </Link>
-        </Button>
+        {isMobile && (
+          <Drawer
+            open={drawerOpen}
+            onOpenChange={setDrawerOpen}
+            direction="left"
+          >
+            <DrawerTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </DrawerTrigger>
+            <DrawerContent className="w-[300px]">
+              <DrawerTitle hidden>Channel List</DrawerTitle>
+              <ChannelList onChannelSelect={() => setDrawerOpen(false)} />
+              <DrawerDescription>Select a channel to edit</DrawerDescription>
+            </DrawerContent>
+          </Drawer>
+        )}
         <EditorToolbar />
         <div className="grow" />
         <OnlineUser />
       </Header>
-      <ResizablePanelGroup orientation="horizontal" className="">
-        <ResizablePanel defaultSize={450} minSize={300} maxSize={500}>
-          <EditorPlaceholder />
-        </ResizablePanel>
-        <ResizableHandle />
+      <ResizablePanelGroup orientation="horizontal" className="overflow-hidden">
+        {!isMobile && (
+          <>
+            <ResizablePanel defaultSize={300} minSize={250} maxSize={400}>
+              <ChannelList />
+            </ResizablePanel>
+            <ResizableHandle />
+          </>
+        )}
         <ResizablePanel>
-          <EditorPlaceholder />
+          <PianoRollEditor />
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>

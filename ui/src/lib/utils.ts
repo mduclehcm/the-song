@@ -11,7 +11,7 @@ export function throttle(fn: () => void, delay: number) {
   return () => {
     const now = Date.now();
     const timeSinceLastExec = now - lastExecTime;
-    
+
     if (timeSinceLastExec >= delay) {
       // Enough time has passed, execute immediately
       lastExecTime = now;

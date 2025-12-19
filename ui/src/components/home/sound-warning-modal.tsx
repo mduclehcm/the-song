@@ -22,6 +22,7 @@ export default function SoundWarningModal({
 }: SoundWarningModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onCancel()}>
+      <DialogTitle>SOUND WARNING</DialogTitle>
       <DialogContent
         showCloseButton={false}
         overlayClassName="bg-black/90"

@@ -1,0 +1,70 @@
+{
+  "channels": [
+    {
+      "name": "Acoustic Piano",
+      "channel": 1
+    },
+
+    {
+      "name": "Acoustic Guitar",
+      "channel": 25
+    },
+    {
+      "name": "Trumpet",
+      "channel": 57
+    },
+    {
+      "name": "Acoustic Drum Kit",
+      "channel": 10
+    },
+    {
+      "name": "Electric Drum Kit",
+      "channel": 10
+    },
+    {
+      "name": "FX Percussion",
+      "channel": 10
+    },
+    {
+      "name": "Electric Bass",
+      "channel": 34
+    },
+    {
+      "name": "Synth Bass",
+      "channel": 39
+    },
+
+    {
+      "name": "Electric Piano",
+      "channel": 5
+    },
+    {
+      "name": "Polysynth",
+      "channel": 91
+    },
+    {
+      "name": "Square",
+      "channel": 81
+    },
+    {
+      "name": "String Ensemble",
+      "channel": 49
+    },
+    {
+      "name": "Choir",
+      "channel": 92
+    },
+    {
+      "name": "Ocarina",
+      "channel": 80
+    },
+    {
+      "name": "Choir Aahs",
+      "channel": 53
+    },
+    {
+      "name": "Flute",
+      "channel": 74
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+services:
+  # Backend service (Development mode with hot reload)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: the-song-backend-dev
+    ports:
+      - "3000:3000"
+    environment:
+      - RUST_LOG=backend=debug,tower_http=debug,axum::rejection=trace
+      - RUST_BACKTRACE=1
+    volumes:
+      - ./backend:/app
+      - backend-cache:/app/target
+      - cargo-cache:/usr/local/cargo/registry
+    restart: unless-stopped
+    networks:
+      - the-song-network
+    command: ["/bin/sh", "-c", "cargo watch -x 'run' 2>&1"]
+
+  # Frontend service (Development mode with hot reload)
+  frontend:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile.dev
+    container_name: the-song-frontend-dev
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    environment:
+      - VITE_SERVER_URL=http://localhost:3000
+      - VITE_WS_URL=ws://localhost:3000/ws
+    volumes:
+      - ./ui:/app
+      - /app/node_modules
+    restart: unless-stopped
+    networks:
+      - the-song-network
+    command: ["/bin/sh", "-c", "npm run dev -- --host 0.0.0.0"]
+
+networks:
+  the-song-network:
+    driver: bridge
+
+volumes:
+  backend-cache:
+  cargo-cache:

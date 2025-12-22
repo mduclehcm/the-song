@@ -1,0 +1,48 @@
+services:
+  # Backend service (Rust/Axum)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: dockerfile.prod
+    container_name: the-song-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - RUST_LOG=backend=debug,tower_http=debug,axum::rejection=trace
+    restart: unless-stopped
+    networks:
+      - the-song-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "timeout 5 bash -c ':> /dev/tcp/127.0.0.1/3000' || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend service (React/Vite)
+  frontend:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+      args:
+        - VITE_SERVER_URL=http://localhost:3000
+        - VITE_WS_URL=ws://localhost:3000/ws
+    container_name: the-song-frontend
+    ports:
+      - "5173:4173"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - the-song-network
+    environment:
+      - NODE_ENV=production
+
+networks:
+  the-song-network:
+    driver: bridge

@@ -1,0 +1,29 @@
+# Development Dockerfile with hot reload
+FROM rust:1.90-slim-bookworm
+
+# Install development dependencies
+RUN apt-get update && \
+    apt-get install -y pkg-config libssl-dev curl && \
+    cargo install cargo-watch && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy dependency files
+COPY Cargo.toml Cargo.lock ./
+
+# Create a dummy main to build dependencies
+RUN mkdir src && \
+    echo "fn main() {}" > src/main.rs && \
+    cargo build && \
+    rm -rf src
+
+# Copy source code (will be overridden by volume mount)
+COPY . .
+
+# Expose the port
+EXPOSE 3000
+
+# Default command (can be overridden in docker-compose)
+CMD ["cargo", "run"]
+

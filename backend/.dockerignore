@@ -1,36 +1,28 @@
-# Build artifacts
+# Rust build artifacts
 target/
+**/*.rs.bk
+*.pdb
 
-# IDE and editor files
+# Cargo lock for libraries (keep it for applications)
+# Cargo.lock
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
+
+# OS
 .DS_Store
+Thumbs.db
 
 # Git
 .git/
 .gitignore
 
-# Documentation
-README.md
-*.md
-
-# Test files
-tests/
-benches/
-
-# CI/CD
-.github/
-.gitlab-ci.yml
-
-# Local development
-.env
-.env.local
-*.log
-
 # Docker
 Dockerfile*
 .dockerignore
 
+# Documentation
+*.md

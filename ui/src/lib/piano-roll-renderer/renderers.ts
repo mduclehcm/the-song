@@ -5,20 +5,130 @@ import {
   NOTE_SPACING_X,
   NOTE_SPACING_Y,
   BEAT_HALF_SIZE,
+  TOTAL_PITCHES,
 } from "@/config";
-import type { Track, TrackInfo } from "./types";
+import type { Crdt } from "@/lib/crdt";
+import type { NoteIdsByPitch, SongConfig, SongInfo } from "./types";
+
+// [number1,number2][]
+// number1: exterior width to the left
+// number2: interior width to the right
+// 0..12
+const KEY_WIDTHS = [
+  [0, 1], // C
+  [0, 0], // C#
+  [1, 1], // D
+  [0, 0], // D#
+  [1, 0], // E
+  [0, 1], // F
+  [0, 0], // F#
+  [1, 1], // G
+  [0, 0], // G#
+  [1, 1], // A
+  [0, 0], // A#
+  [1, 0], // B
+];
 
 export function renderPitchRuler(
   ctx: CanvasRenderingContext2D,
-  width: number
+  offsetX: number
 ): void {
-  ctx.fillStyle = "#0c0c0c";
-  ctx.fillRect(0, 0, width, PITCH_RULER_HEIGHT - 10);
+  const initialX = offsetX + 10 + NOTE_SPACING_X * 2;
+
+  const keyHeight = PITCH_RULER_HEIGHT - 20;
+  const blackKeyHeight = keyHeight * 0.7;
+
+  // Black key pattern in octave: C# D# _ F# G# A# _
+  // Indices:                     1  3  _ 6  8  10 _
+  const blackKeyPattern = [1, 3, 6, 8, 10];
+  const isBlackKey = (pitch: number) => blackKeyPattern.includes(pitch % 12);
+
+  ctx.save();
+
+  // Draw white keys first
+  for (let pitch = 0; pitch < TOTAL_PITCHES; pitch++) {
+    if (!isBlackKey(pitch)) {
+      let x =
+        initialX + pitch * (BEAT_SIZE + NOTE_SPACING_X * 2) - BEAT_HALF_SIZE;
+      let width = BEAT_SIZE + NOTE_SPACING_X * 2;
+
+      const [exteriorLeft, interiorRight] = KEY_WIDTHS[pitch % 12];
+      if (exteriorLeft === 1) {
+        x -= BEAT_HALF_SIZE + NOTE_SPACING_X * 2;
+        width += BEAT_HALF_SIZE + NOTE_SPACING_X * 2;
+      }
+      if (interiorRight === 1) {
+        width += BEAT_HALF_SIZE;
+      }
+
+      // White key
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(x, 0, width, keyHeight);
+
+      // Border
+      ctx.strokeStyle = "#333333";
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(x, 0, width, keyHeight);
+    }
+  }
+
+  // Draw black keys on top
+  for (let pitch = 0; pitch < TOTAL_PITCHES; pitch++) {
+    if (isBlackKey(pitch)) {
+      let x =
+        initialX +
+        pitch * (BEAT_SIZE + NOTE_SPACING_X * 2) -
+        BEAT_HALF_SIZE -
+        5;
+      let width = BEAT_SIZE + 10;
+
+      const [exteriorLeft, interiorRight] = KEY_WIDTHS[pitch % 12];
+      if (exteriorLeft === 1) {
+        x -= BEAT_HALF_SIZE + NOTE_SPACING_X * 2;
+        width += BEAT_HALF_SIZE + NOTE_SPACING_X * 2;
+      }
+      if (interiorRight === 1) {
+        width += BEAT_HALF_SIZE;
+      }
+      // Black key
+      ctx.fillStyle = "#000";
+      ctx.fillRect(x, 0, width, blackKeyHeight);
+
+      // Border and highlight for 3D effect
+      ctx.strokeStyle = "#000000";
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(x, 0, width, blackKeyHeight);
+    }
+  }
+
+  // Draw octave markers (C notes)
+  ctx.fillStyle = "#888888";
+  ctx.font = "14px monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+
+  for (let pitch = 0; pitch < TOTAL_PITCHES; pitch += 12) {
+    const octave = Math.floor(pitch / 12);
+    let x =
+      initialX + pitch * (BEAT_SIZE + NOTE_SPACING_X * 2) - BEAT_HALF_SIZE - 5;
+    let width = BEAT_SIZE + 10;
+    const [exteriorLeft, interiorRight] = KEY_WIDTHS[pitch % 12];
+    if (exteriorLeft === 1) {
+      x -= BEAT_HALF_SIZE + NOTE_SPACING_X * 2;
+      width += BEAT_HALF_SIZE + NOTE_SPACING_X * 2;
+    }
+    if (interiorRight === 1) {
+      width += BEAT_HALF_SIZE;
+    }
+    ctx.fillText(`C${octave}`, x + width / 2, PITCH_RULER_HEIGHT - 25);
+  }
+
+  ctx.restore();
 }
 
 export function renderBackground(
   ctx: CanvasRenderingContext2D,
-  trackInfo: TrackInfo,
+  songInfo: SongInfo,
   width: number,
   height: number,
   _offsetX: number,
@@ -27,11 +137,11 @@ export function renderBackground(
   // Calculate the visible content area width
   const contentWidth = width - TIME_RULER_WIDTH;
 
-  for (let i = 0; i < trackInfo.totalBars; i++) {
-    const barY = i * trackInfo.barHeightInPixels;
+  for (let i = 0; i < songInfo.totalBars; i++) {
+    const barY = i * songInfo.barHeightInPixels;
 
     // Render bars that are visible in the viewport
-    if (barY + offsetY + trackInfo.barHeightInPixels < PITCH_RULER_HEIGHT) {
+    if (barY + offsetY + songInfo.barHeightInPixels < PITCH_RULER_HEIGHT) {
       continue;
     }
     if (barY + offsetY > height) break;
@@ -43,18 +153,19 @@ export function renderBackground(
       TIME_RULER_WIDTH,
       offsetY + barY,
       contentWidth,
-      trackInfo.barHeightInPixels
+      songInfo.barHeightInPixels
     );
   }
 }
 
 export function renderTimeRuler(
   ctx: CanvasRenderingContext2D,
-  track: Track,
-  trackInfo: TrackInfo,
+  songConfig: SongConfig,
+  songInfo: SongInfo,
   height: number,
   offsetY: number
 ): void {
+  ctx.save();
   ctx.fillStyle = "#0c0c0c";
   ctx.fillRect(0, 0, TIME_RULER_WIDTH, height);
 
@@ -62,7 +173,7 @@ export function renderTimeRuler(
   // Bpm beats per minute = (bpm/60) beats per second
   // Pixels per second = (bpm/60) * beatHeightInPixels
   const pixelsPerSecond =
-    (track.bpm / 60) * (trackInfo.beatHeightInPixels + NOTE_SPACING_Y);
+    (songConfig.bpm / 60) * (songInfo.beatHeightInPixels + NOTE_SPACING_Y);
 
   ctx.strokeStyle = "#666";
   ctx.fillStyle = "#ccc";
@@ -70,96 +181,101 @@ export function renderTimeRuler(
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
 
-  const maxTime = track.length;
+  const maxTime = songConfig.length;
+
+  // Draw minor ticks (every 0.1 second)
+  ctx.strokeStyle = "#444";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let time = 0; time <= maxTime * 10; time += 1) {
+    const y = (time / 10) * pixelsPerSecond + offsetY;
+    if (y < PITCH_RULER_HEIGHT || y > height) continue;
+
+    if (time % 10 === 0) continue;
+    // Draw shorter tick mark
+    ctx.moveTo(TIME_RULER_WIDTH - 5, y);
+    ctx.lineTo(TIME_RULER_WIDTH, y);
+  }
+  ctx.stroke();
 
   // Draw major ticks (every 1 second) with labels
+  ctx.beginPath();
+  ctx.lineWidth = 2;
   for (let time = 0; time <= maxTime; time += 1) {
     const y = time * pixelsPerSecond + offsetY;
     if (y < PITCH_RULER_HEIGHT || y > height) continue;
 
     // Draw tick mark
-    ctx.beginPath();
     ctx.moveTo(TIME_RULER_WIDTH - 10, y);
     ctx.lineTo(TIME_RULER_WIDTH, y);
-    ctx.stroke();
 
     ctx.fillText(`${time.toFixed(0)}s`, TIME_RULER_WIDTH - 12, y);
   }
-
-  // Draw minor ticks (every 0.1 second)
-  ctx.strokeStyle = "#444";
-  for (let time = 0; time <= maxTime; time += 0.1) {
-    const y = time * pixelsPerSecond + offsetY;
-    if (y < PITCH_RULER_HEIGHT || y > height) continue;
-
-    // Skip if it's a major tick (whole second)
-    // Use Math.abs to handle floating point precision issues
-    if (Math.abs(time % 1) < 0.01) continue;
-
-    // Draw shorter tick mark
-    ctx.beginPath();
-    ctx.moveTo(TIME_RULER_WIDTH - 5, y);
-    ctx.lineTo(TIME_RULER_WIDTH, y);
-    ctx.stroke();
-  }
-}
-
-export function renderNoteGrid(
-  _ctx: CanvasRenderingContext2D,
-  _offsetX: number,
-  _offsetY: number
-): void {
-  // todo
+  ctx.stroke();
+  ctx.restore();
 }
 
 export function renderNotes(
   ctx: CanvasRenderingContext2D,
-  track: Track,
-  trackInfo: TrackInfo,
+  _songConfig: SongConfig,
+  songInfo: SongInfo,
+  noteIdsByPitch: NoteIdsByPitch,
+  crdt: Crdt,
   offsetX: number,
   offsetY: number,
-  hoveredPitch: number | null = null,
-  hoveredStartTime: number | null = null
+  hoveredNoteId: string | null,
+  accentColor: string
 ): void {
+  ctx.save();
+  ctx.fillStyle = accentColor;
+
   const initialX = offsetX + 10 + NOTE_SPACING_X * 2;
 
-  for (let pitch = 0; pitch < track.notes.length; pitch++) {
+  for (let pitch = 0; pitch < noteIdsByPitch.length; pitch++) {
     // Calculate X position for this pitch
     const pitchX = initialX + pitch * (BEAT_SIZE + NOTE_SPACING_X * 2);
 
-    for (const note of track.notes[pitch]) {
-      // endTime is inclusive, duration = endTime - startTime + 1
-      const duration = note.endTime - note.startTime + 1;
+    const noteIds = noteIdsByPitch[pitch];
+    for (const noteId of noteIds) {
+      const noteData = crdt.getNote(noteId);
+      if (!noteData) continue;
+
+      // duration = noteData.duration
+      const duration = noteData.duration;
       const noteHeight =
-        trackInfo.beatHeightInPixels * duration +
+        songInfo.beatHeightInPixels * duration +
         NOTE_SPACING_Y * Math.max(0, duration - 1);
 
       const noteX = pitchX - BEAT_HALF_SIZE;
       const noteY =
         offsetY -
         BEAT_HALF_SIZE +
-        note.startTime * (trackInfo.beatHeightInPixels + NOTE_SPACING_Y);
+        noteData.startTime * (songInfo.beatHeightInPixels + NOTE_SPACING_Y);
 
-      const isHovered =
-        hoveredPitch === pitch && hoveredStartTime === note.startTime;
-
-      ctx.save();
+      const isHovered = hoveredNoteId === noteId;
       if (isHovered) {
+        ctx.save();
+        ctx.beginPath();
         ctx.shadowBlur = 10;
-        ctx.shadowColor = "#00ff88";
+        ctx.shadowColor = accentColor;
         ctx.shadowOffsetX = 0;
         ctx.shadowOffsetY = 0;
-        ctx.fillStyle = "rgba(0, 0, 0, 0)";
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 2;
+        ctx.roundRect(noteX, noteY, BEAT_SIZE, noteHeight, BEAT_HALF_SIZE);
+        ctx.fill();
+        ctx.stroke();
+        ctx.closePath();
+        ctx.restore();
+      } else {
+        ctx.beginPath();
+        ctx.roundRect(noteX, noteY, BEAT_SIZE, noteHeight, BEAT_HALF_SIZE);
+        ctx.fill();
+        ctx.closePath();
       }
-
-      ctx.fillStyle = "#00ff88";
-      ctx.beginPath();
-      ctx.roundRect(noteX, noteY, BEAT_SIZE, noteHeight, BEAT_HALF_SIZE);
-      ctx.fill();
-      ctx.closePath();
-      ctx.restore();
     }
   }
+  ctx.restore();
 }
 
 export function renderMousePlaceholder(
@@ -167,7 +283,8 @@ export function renderMousePlaceholder(
   mouseX: number,
   mouseY: number,
   offsetX: number,
-  offsetY: number
+  offsetY: number,
+  accentColor: string
 ): void {
   if (mouseX < TIME_RULER_WIDTH || mouseY < PITCH_RULER_HEIGHT) {
     return;
@@ -196,8 +313,14 @@ export function renderMousePlaceholder(
   const noteX = snappedX - BEAT_HALF_SIZE;
   const noteY = snappedY - BEAT_HALF_SIZE;
 
-  ctx.fillStyle = "rgba(0, 255, 136, 0.5)";
-  ctx.strokeStyle = "#00ff88";
+  ctx.save();
+  const rgb = hexToRgb(accentColor);
+  if (rgb) {
+    ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.5)`;
+  } else {
+    ctx.fillStyle = "rgba(0, 255, 136, 0.5)";
+  }
+  ctx.strokeStyle = accentColor;
   ctx.lineWidth = 2;
   ctx.setLineDash([4, 4]);
   ctx.beginPath();
@@ -207,14 +330,26 @@ export function renderMousePlaceholder(
   ctx.restore();
 }
 
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result
+    ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16),
+      }
+    : null;
+}
+
 export function renderNoteCreationPreview(
   ctx: CanvasRenderingContext2D,
-  trackInfo: TrackInfo,
+  songInfo: SongInfo,
   offsetX: number,
   offsetY: number,
   pitch: number,
   startBeat: number,
-  endBeat: number
+  endBeat: number,
+  accentColor: string
 ): void {
   const minBeat = Math.min(startBeat, endBeat);
   const maxBeat = Math.max(startBeat, endBeat);
@@ -225,18 +360,23 @@ export function renderNoteCreationPreview(
   const pitchX = initialX + pitch * cellWidth;
 
   const noteHeight =
-    trackInfo.beatHeightInPixels * duration +
+    songInfo.beatHeightInPixels * duration +
     NOTE_SPACING_Y * Math.max(0, duration - 1);
 
   const noteX = pitchX - BEAT_HALF_SIZE;
   const noteY =
     offsetY -
     BEAT_HALF_SIZE +
-    minBeat * (trackInfo.beatHeightInPixels + NOTE_SPACING_Y);
+    minBeat * (songInfo.beatHeightInPixels + NOTE_SPACING_Y);
 
   ctx.save();
-  ctx.fillStyle = "rgba(0, 255, 136, 0.5)";
-  ctx.strokeStyle = "#00ff88";
+  const rgb = hexToRgb(accentColor);
+  if (rgb) {
+    ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.5)`;
+  } else {
+    ctx.fillStyle = "rgba(0, 255, 136, 0.5)";
+  }
+  ctx.strokeStyle = accentColor;
   ctx.lineWidth = 2;
   ctx.setLineDash([4, 4]);
 

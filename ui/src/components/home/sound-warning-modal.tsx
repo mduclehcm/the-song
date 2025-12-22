@@ -22,7 +22,6 @@ export default function SoundWarningModal({
 }: SoundWarningModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onCancel()}>
-      <DialogTitle>SOUND WARNING</DialogTitle>
       <DialogContent
         showCloseButton={false}
         overlayClassName="bg-black/90"
@@ -33,6 +32,7 @@ export default function SoundWarningModal({
         }}
         onInteractOutside={onCancel}
       >
+        <DialogTitle hidden>SOUND WARNING</DialogTitle>
         {/* Icon */}
         <div className="flex justify-center mb-6">
           <div className="w-16 h-16 flex items-center justify-center border border-border">

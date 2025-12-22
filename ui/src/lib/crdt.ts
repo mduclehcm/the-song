@@ -1,4 +1,4 @@
-import { LoroCounter, LoroDoc, LoroMap } from "loro-crdt";
+import { LoroCounter, LoroDoc, LoroList, LoroMap } from "loro-crdt";
 
 import { THROTTLE_COMMIT_DELAY, MIN_BPM, MAX_BPM } from "@/config";
 import { EventEmitter } from "@/lib/event";
@@ -6,11 +6,37 @@ import { throttle } from "@/lib/utils";
 import type {
   NoteData,
   NotesMap,
-  NotesByPitch,
+  NoteIdsByPitch,
 } from "@/lib/piano-roll-renderer/types";
 
 // Total number of pitches (4 octaves * 12 notes per octave)
 const TOTAL_PITCHES = 48;
+const NUM_TRACKS = 16;
+
+// Default accent colors for tracks (16 distinct colors)
+export const DEFAULT_ACCENT_COLORS = [
+  "#00ff88", // Mint green
+  "#ff6b6b", // Coral red
+  "#4ecdc4", // Turquoise
+  "#ffe66d", // Yellow
+  "#a8dadc", // Light blue
+  "#ff69b4", // Hot pink
+  "#98d8c8", // Seafoam
+  "#f7b731", // Orange
+  "#a29bfe", // Lavender
+  "#fd79a8", // Pink
+  "#74b9ff", // Sky blue
+  "#55efc4", // Aqua
+  "#fdcb6e", // Gold
+  "#e17055", // Terra cotta
+  "#81ecec", // Cyan
+  "#a29bfe", // Purple
+];
+
+export interface TrackConfig {
+  accentColor: string;
+  // Future attributes can be added here
+}
 
 export type CommitEvent = {
   name: "commit";
@@ -18,19 +44,26 @@ export type CommitEvent = {
 };
 export type CrdtEvent = CommitEvent;
 
-export type NotesChangeCallback = (notes: NotesMap) => void;
+export type ChangeCallback = () => void;
+export type BpmChangeCallback = (bpm: number) => void;
 
 export class Crdt extends EventEmitter<CommitEvent> {
   private doc: LoroDoc;
   private bpm: LoroCounter;
-  private notes: LoroMap;
-  private notesChangeCallbacks: NotesChangeCallback[] = [];
+  private notes: LoroMap; // Map of noteId -> NoteData
+  private tracks: LoroList; // List of 16 tracks, each track is a LoroList of pitch lists
+  private trackConfigs: LoroList; // List of 16 track configs
+  private changeCallbacks: ChangeCallback[] = [];
+  private bpmChangeCallbacks: BpmChangeCallback[] = [];
 
   constructor() {
     super();
     this.doc = new LoroDoc();
     this.bpm = this.doc.getCounter("bpm");
     this.notes = this.doc.getMap("notes");
+    this.tracks = this.doc.getList("tracks");
+    this.trackConfigs = this.doc.getList("trackConfigs");
+
     this.commitThrottled = throttle(
       this.commitThrottled.bind(this),
       THROTTLE_COMMIT_DELAY
@@ -38,7 +71,22 @@ export class Crdt extends EventEmitter<CommitEvent> {
 
     // Subscribe to notes changes
     this.notes.subscribe(() => {
-      this.notifyNotesChange();
+      this.notifyChange();
+    });
+
+    // Subscribe to tracks changes
+    this.tracks.subscribe(() => {
+      this.notifyChange();
+    });
+
+    // Subscribe to track configs changes
+    this.trackConfigs.subscribe(() => {
+      this.notifyChange();
+    });
+
+    // Subscribe to BPM changes
+    this.bpm.subscribe(() => {
+      this.notifyBpmChange();
     });
   }
 
@@ -46,8 +94,97 @@ export class Crdt extends EventEmitter<CommitEvent> {
     this.doc.import(snapshot);
   }
 
+  // --- Direct access to Loro containers ---
+
+  public getNotesContainer(): LoroMap {
+    return this.notes;
+  }
+
+  public getTracksContainer(): LoroList {
+    return this.tracks;
+  }
+
+  public getTrackContainer(trackIndex: number): LoroList | null {
+    if (trackIndex < 0 || trackIndex >= NUM_TRACKS) return null;
+    return this.tracks.get(trackIndex) as LoroList | null;
+  }
+
+  public getPitchListContainer(
+    trackIndex: number,
+    pitch: number
+  ): LoroList | null {
+    const track = this.getTrackContainer(trackIndex);
+    if (!track || pitch < 0 || pitch >= TOTAL_PITCHES) return null;
+    return track.get(pitch) as LoroList | null;
+  }
+
+  // --- Track Config Operations ---
+
+  public getTrackConfig(trackIndex: number): TrackConfig | null {
+    if (trackIndex < 0 || trackIndex >= NUM_TRACKS) return null;
+
+    const configMap = this.trackConfigs.get(trackIndex) as LoroMap | undefined;
+    if (!configMap) return null;
+
+    return {
+      accentColor:
+        (configMap.get("accentColor") as string) ||
+        DEFAULT_ACCENT_COLORS[trackIndex],
+    };
+  }
+
+  public setTrackConfig(
+    trackIndex: number,
+    config: Partial<TrackConfig>
+  ): void {
+    if (trackIndex < 0 || trackIndex >= NUM_TRACKS) return;
+
+    const configMap = this.trackConfigs.get(trackIndex) as LoroMap | undefined;
+    if (!configMap) return;
+
+    if (config.accentColor !== undefined) {
+      configMap.set("accentColor", config.accentColor);
+    }
+
+    this.commit();
+  }
+
+  public getAllTrackConfigs(): TrackConfig[] {
+    const configs: TrackConfig[] = [];
+    for (let i = 0; i < NUM_TRACKS; i++) {
+      const config = this.getTrackConfig(i);
+      configs.push(config || { accentColor: DEFAULT_ACCENT_COLORS[i] });
+    }
+    return configs;
+  }
+
+  // --- End Track Config Operations ---
+
+  // --- BPM Operations ---
+
   public getBpm() {
     return this.bpm;
+  }
+
+  public getBpmValue(): number {
+    return this.bpm.value;
+  }
+
+  public subscribeBpm(callback: BpmChangeCallback): () => void {
+    this.bpmChangeCallbacks.push(callback);
+    return () => {
+      const index = this.bpmChangeCallbacks.indexOf(callback);
+      if (index > -1) {
+        this.bpmChangeCallbacks.splice(index, 1);
+      }
+    };
+  }
+
+  private notifyBpmChange(): void {
+    const bpmValue = this.bpm.value;
+    for (const callback of this.bpmChangeCallbacks) {
+      callback(bpmValue);
+    }
   }
 
   public incrementBpm(value: number) {
@@ -94,6 +231,7 @@ export class Crdt extends EventEmitter<CommitEvent> {
    * Add a new note to the CRDT store
    */
   public addNote(noteData: NoteData): void {
+    // Add to notes map
     const noteMap = this.notes.setContainer(noteData.id, new LoroMap());
     noteMap.set("id", noteData.id);
     noteMap.set("pitch", noteData.pitch);
@@ -102,6 +240,17 @@ export class Crdt extends EventEmitter<CommitEvent> {
     noteMap.set("velocity", noteData.velocity);
     noteMap.set("createdAt", noteData.createdAt);
     noteMap.set("createdBy", noteData.createdBy);
+    noteMap.set("trackIndex", noteData.trackIndex);
+
+    // Add note ID to the track's pitch list
+    const pitchList = this.getPitchListContainer(
+      noteData.trackIndex,
+      noteData.pitch
+    );
+    if (pitchList) {
+      pitchList.push(noteData.id);
+    }
+
     this.commit();
   }
 
@@ -111,7 +260,9 @@ export class Crdt extends EventEmitter<CommitEvent> {
    */
   public updateNote(
     noteId: string,
-    updates: Partial<Omit<NoteData, "id" | "createdAt" | "createdBy">>
+    updates: Partial<
+      Omit<NoteData, "id" | "createdAt" | "createdBy" | "trackIndex">
+    >
   ): void {
     const noteMap = this.notes.get(noteId) as LoroMap | undefined;
     if (!noteMap) {
@@ -119,9 +270,31 @@ export class Crdt extends EventEmitter<CommitEvent> {
       return;
     }
 
-    if (updates.pitch !== undefined) {
+    const oldPitch = noteMap.get("pitch") as number;
+    const trackIndex = noteMap.get("trackIndex") as number;
+
+    // Handle pitch change - need to move note ID to different pitch list
+    if (updates.pitch !== undefined && updates.pitch !== oldPitch) {
+      // Remove from old pitch list
+      const oldPitchList = this.getPitchListContainer(trackIndex, oldPitch);
+      if (oldPitchList) {
+        const noteIds = oldPitchList.toArray() as string[];
+        const idx = noteIds.indexOf(noteId);
+        if (idx !== -1) {
+          oldPitchList.delete(idx, 1);
+        }
+      }
+      // Add to new pitch list
+      const newPitchList = this.getPitchListContainer(
+        trackIndex,
+        updates.pitch
+      );
+      if (newPitchList) {
+        newPitchList.push(noteId);
+      }
       noteMap.set("pitch", updates.pitch);
     }
+
     if (updates.startTime !== undefined) {
       noteMap.set("startTime", updates.startTime);
     }
@@ -138,8 +311,43 @@ export class Crdt extends EventEmitter<CommitEvent> {
    * Delete a note from the CRDT store
    */
   public deleteNote(noteId: string): void {
+    const noteMap = this.notes.get(noteId) as LoroMap | undefined;
+    if (noteMap) {
+      const pitch = noteMap.get("pitch") as number;
+      const trackIndex = noteMap.get("trackIndex") as number;
+
+      // Remove from pitch list
+      const pitchList = this.getPitchListContainer(trackIndex, pitch);
+      if (pitchList) {
+        const noteIds = pitchList.toArray() as string[];
+        const idx = noteIds.indexOf(noteId);
+        if (idx !== -1) {
+          pitchList.delete(idx, 1);
+        }
+      }
+    }
+
     this.notes.delete(noteId);
     this.commit();
+  }
+
+  /**
+   * Get a single note by ID
+   */
+  public getNote(noteId: string): NoteData | null {
+    const noteMap = this.notes.get(noteId) as LoroMap | undefined;
+    if (!noteMap) return null;
+
+    return {
+      id: noteMap.get("id") as string,
+      pitch: noteMap.get("pitch") as number,
+      startTime: noteMap.get("startTime") as number,
+      duration: noteMap.get("duration") as number,
+      velocity: noteMap.get("velocity") as number,
+      createdAt: noteMap.get("createdAt") as number,
+      createdBy: noteMap.get("createdBy") as string,
+      trackIndex: noteMap.get("trackIndex") as number,
+    };
   }
 
   /**
@@ -159,6 +367,7 @@ export class Crdt extends EventEmitter<CommitEvent> {
         velocity: noteMap.get("velocity") as number,
         createdAt: noteMap.get("createdAt") as number,
         createdBy: noteMap.get("createdBy") as string,
+        trackIndex: noteMap.get("trackIndex") as number,
       };
       result.set(key, noteData);
     }
@@ -167,53 +376,49 @@ export class Crdt extends EventEmitter<CommitEvent> {
   }
 
   /**
-   * Get notes organized by pitch for rendering
-   * Returns an array where index = pitch, value = array of notes at that pitch
+   * Get note IDs organized by pitch for a specific track
    */
-  public getNotesByPitch(): NotesByPitch {
-    const result: NotesByPitch = Array.from(
+  public getNoteIdsByPitch(trackIndex: number): NoteIdsByPitch {
+    const result: NoteIdsByPitch = Array.from(
       { length: TOTAL_PITCHES },
       () => []
     );
-    const notesMap = this.getNotesMap();
+    const track = this.getTrackContainer(trackIndex);
+    if (!track) return result;
 
-    for (const noteData of notesMap.values()) {
-      if (noteData.pitch >= 0 && noteData.pitch < TOTAL_PITCHES) {
-        result[noteData.pitch].push({
-          startTime: noteData.startTime,
-          // duration 1 means note occupies only the start beat (endTime = startTime)
-          endTime: noteData.startTime + noteData.duration - 1,
-          velocity: noteData.velocity,
-        });
+    for (let pitch = 0; pitch < TOTAL_PITCHES; pitch++) {
+      const pitchList = track.get(pitch) as LoroList | undefined;
+      if (pitchList) {
+        result[pitch] = pitchList.toArray() as string[];
       }
-    }
-
-    // Sort notes by startTime within each pitch
-    for (const pitchNotes of result) {
-      pitchNotes.sort((a, b) => a.startTime - b.startTime);
     }
 
     return result;
   }
 
   /**
-   * Subscribe to notes changes
+   * Get notes for a specific track, organized by pitch for rendering
    */
-  public subscribeNotes(callback: NotesChangeCallback): () => void {
-    this.notesChangeCallbacks.push(callback);
-    // Return unsubscribe function
+  public getNotesForTrackByPitch(trackIndex: number): NoteIdsByPitch {
+    return this.getNoteIdsByPitch(trackIndex);
+  }
+
+  /**
+   * Subscribe to any change (notes or tracks)
+   */
+  public subscribeChange(callback: ChangeCallback): () => void {
+    this.changeCallbacks.push(callback);
     return () => {
-      const index = this.notesChangeCallbacks.indexOf(callback);
+      const index = this.changeCallbacks.indexOf(callback);
       if (index > -1) {
-        this.notesChangeCallbacks.splice(index, 1);
+        this.changeCallbacks.splice(index, 1);
       }
     };
   }
 
-  private notifyNotesChange(): void {
-    const notesMap = this.getNotesMap();
-    for (const callback of this.notesChangeCallbacks) {
-      callback(notesMap);
+  private notifyChange(): void {
+    for (const callback of this.changeCallbacks) {
+      callback();
     }
   }
 

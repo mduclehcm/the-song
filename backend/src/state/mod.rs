@@ -227,13 +227,72 @@ pub struct SynthesizerState {
     docs: RwLock<loro::LoroDoc>,
 }
 
+// Total number of pitches (5 octaves * 12 notes per octave)
+const TOTAL_PITCHES: usize = 60;
+// Number of tracks in a song
+const NUM_TRACKS: usize = 16;
+
+// Default accent colors for tracks (16 distinct colors)
+const DEFAULT_ACCENT_COLORS: [&str; 16] = [
+    "#00ff88", // Mint green
+    "#ff6b6b", // Coral red
+    "#4ecdc4", // Turquoise
+    "#ffe66d", // Yellow
+    "#a8dadc", // Light blue
+    "#ff69b4", // Hot pink
+    "#98d8c8", // Seafoam
+    "#f7b731", // Orange
+    "#a29bfe", // Lavender
+    "#fd79a8", // Pink
+    "#74b9ff", // Sky blue
+    "#55efc4", // Aqua
+    "#fdcb6e", // Gold
+    "#e17055", // Terra cotta
+    "#81ecec", // Cyan
+    "#a29bfe", // Purple
+];
+
 impl SynthesizerState {
     pub fn new() -> Self {
         let docs = loro::LoroDoc::new();
+
+        // Initialize BPM counter
         let counter = docs.get_counter("bpm");
         counter
             .increment(120.0)
             .expect("Failed to increment counter");
+
+        // Initialize notes map (will be empty initially)
+        let _notes = docs.get_map("notes");
+
+        // Initialize 16 tracks, each with 48 pitch lists
+        let tracks = docs.get_list("tracks");
+        for track_index in 0..NUM_TRACKS {
+            let track_list = tracks
+                .insert_container(track_index, loro::LoroList::new())
+                .expect("Failed to create track list");
+            // Initialize empty lists for each pitch
+            for pitch in 0..TOTAL_PITCHES {
+                track_list
+                    .insert_container(pitch, loro::LoroList::new())
+                    .expect("Failed to create pitch list");
+            }
+        }
+
+        // Initialize 16 track configs with default accent colors
+        let track_configs = docs.get_list("trackConfigs");
+        for track_index in 0..NUM_TRACKS {
+            let config_map = track_configs
+                .insert_container(track_index, loro::LoroMap::new())
+                .expect("Failed to create track config map");
+            config_map
+                .insert("accentColor", DEFAULT_ACCENT_COLORS[track_index])
+                .expect("Failed to set accent color");
+        }
+
+        // Commit the initial state
+        docs.commit();
+
         Self {
             docs: RwLock::new(docs),
         }

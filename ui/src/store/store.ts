@@ -68,6 +68,7 @@ export const useMouseActions = () =>
 
 export const useBpm = () => useStore((state) => state.bpm);
 export const useActiveChannel = () => useStore((state) => state.activeChannel);
+export const useTrackConfigs = () => useStore((state) => state.trackConfigs);
 export const useCrdt = () => useStore((state) => state.crdt);
 export const useSynthesizedActions = () =>
   useStore(
@@ -75,6 +76,7 @@ export const useSynthesizedActions = () =>
       incrementBpm: state.incrementBpm,
       decrementBpm: state.decrementBpm,
       setActiveChannel: state.setActiveChannel,
+      setTrackConfig: state.setTrackConfig,
     }))
   );
 export const useNotesActions = () =>

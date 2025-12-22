@@ -3,21 +3,14 @@ import {
   NOTE_SPACING_X,
   NOTE_SPACING_Y,
   PITCH_RULER_HEIGHT,
+  SONG_LEN_IN_SECONDS,
   TIME_RULER_WIDTH,
 } from "@/config";
-import type { Crdt } from "@/lib/crdt";
 import { getUserId } from "@/store/store";
+import { crdt } from "@/store/slices/synthesized-slice";
 
 import { DragHandler } from "./drag-handler";
-import {
-  renderBackground,
-  renderMousePlaceholder,
-  renderNoteCreationPreview,
-  renderNoteGrid,
-  renderNotes,
-  renderPitchRuler,
-  renderTimeRuler,
-} from "./renderers";
+import * as renderers from "./renderers";
 import { clampScroll, getScrollBounds } from "./scroll-utils";
 import {
   type SnapAnimationState,
@@ -26,47 +19,57 @@ import {
   startSnapBack,
   updateSnapAnimation,
 } from "./snap-animation";
-import type { NoteData, Track, TrackConfig, TrackInfo } from "./types";
+import type { NoteData, SongConfig, SongInfo } from "./types";
 
-// Re-export types for external use
+// HMR support: store renderer functions in a mutable object
+let renderFns = { ...renderers };
+if (import.meta.hot) {
+  import.meta.hot.accept("./renderers", (newModule) => {
+    if (newModule) {
+      renderFns = newModule as unknown as typeof renderers;
+    }
+  });
+}
+
 export type {
   Note,
   NoteData,
   NotesByPitch,
+  NoteIdsByPitch,
   NotesMap,
+  Song,
+  SongConfig,
+  SongInfo,
   Track,
-  TrackConfig,
-  TrackInfo,
 } from "./types";
 
 /**
- * Piano roll renderer
- * - Renders a piano roll
- * - Time ruler in vertical axis
- * - Pitch ruler in horizontal axis
- * - Notes are rendered as rounded rectangles. 1 beat note will be rendered as a circle.
- *
- * @param canvas - The canvas element to render on
+ * Immediate mode UI for the piano roll
  */
-export default class PianoRollRenderer {
-  private ctx: CanvasRenderingContext2D;
-  private width: number;
-  private height: number;
-  private destroyed: boolean = false;
-  private track: Track;
-  private trackConfig: TrackConfig;
-  private trackInfo: TrackInfo;
+class PianoRollController {
+  private static instance: PianoRollController | null = null;
 
-  // CRDT subscription
-  private crdt: Crdt | null = null;
+  private container: HTMLElement | null = null;
+  private canvas: HTMLCanvasElement | null = null;
+  private ctx: CanvasRenderingContext2D | null = null;
+  private width: number = 0;
+  private height: number = 0;
+  private destroyed: boolean = true;
+  private songConfig: SongConfig;
+  private songInfo: SongInfo;
+  private activeTrackIndex: number = 0; // Currently active track for editing
+
+  // Subscriptions
   private unsubscribeCrdt: (() => void) | null = null;
+  private unsubscribeBpm: (() => void) | null = null;
+  private resizeObserver: ResizeObserver | null = null;
 
   // Scroll state
   private scrollX: number = 0;
   private scrollY: number = 0;
 
   // Handlers
-  private dragHandler: DragHandler;
+  private dragHandler: DragHandler | null = null;
   private snapState: SnapAnimationState;
 
   // Mouse position state
@@ -75,8 +78,6 @@ export default class PianoRollRenderer {
 
   // Hovered note (pitch and startTime to identify it in render, id for deletion)
   private hoveredNoteId: string | null = null;
-  private hoveredNotePitch: number | null = null;
-  private hoveredNoteStartTime: number | null = null;
 
   // Note creation drag state
   private isCreatingNote: boolean = false;
@@ -92,48 +93,105 @@ export default class PianoRollRenderer {
   private resizingNoteOriginalStartTime: number | null = null;
   private resizingNoteOriginalDuration: number | null = null;
 
-  constructor(private canvas: HTMLCanvasElement) {
-    const ctx = this.canvas.getContext("2d");
-    if (!ctx) {
-      throw new Error("Failed to get canvas context");
-    }
+  // Render scheduling state
+  private renderScheduled: boolean = false;
+  private renderLoopRunning: boolean = false;
 
-    // Configure context for best quality rendering
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    if ("textRenderingOptimization" in ctx) {
-      (ctx as any).textRenderingOptimization = "optimizeQuality";
-    }
-
-    // Scale context for high-DPI displays
-    const dpr = window.devicePixelRatio || 1;
-    ctx.scale(dpr, dpr);
-
-    this.ctx = ctx;
-    // Store logical dimensions (CSS size), not physical canvas dimensions
-    this.width = this.canvas.width / dpr;
-    this.height = this.canvas.height / dpr;
-    this.trackConfig = { length: 0, timeSignature: [4, 4], bpm: 120 };
-    this.track = { ...this.trackConfig, notes: [] };
-    this.trackInfo = {
+  private constructor() {
+    // Initialize with default values
+    this.songConfig = {
+      length: SONG_LEN_IN_SECONDS,
+      timeSignature: [4, 4],
+      bpm: 120,
+    };
+    this.songInfo = {
       lengthInPixels: 0,
       totalBars: 0,
       beatHeightInPixels: 0,
       barHeightInPixels: 0,
     };
-
-    // Initialize snap animation state
     this.snapState = createSnapAnimationState();
+  }
+
+  static getInstance(): PianoRollController {
+    if (!PianoRollController.instance) {
+      PianoRollController.instance = new PianoRollController();
+    }
+    return PianoRollController.instance;
+  }
+
+  /**
+   * Get the active track index
+   */
+  getActiveTrackIndex(): number {
+    return this.activeTrackIndex;
+  }
+
+  /**
+   * Set the active track index
+   */
+  setActiveTrackIndex(index: number): void {
+    if (index >= 0 && index < 16) {
+      this.activeTrackIndex = index;
+      this.scheduleRender();
+    }
+  }
+
+  /**
+   * Mount the renderer to a container element
+   * Creates a canvas and starts the render loop
+   */
+  mount(container: HTMLElement): void {
+    // If already mounted to this container, do nothing
+    if (this.container === container && !this.destroyed) {
+      return;
+    }
+
+    // Unmount from previous container if any
+    this.unmount();
+
+    this.container = container;
+
+    // Create canvas
+    this.canvas = document.createElement("canvas");
+    this.canvas.style.display = "block";
+    container.appendChild(this.canvas);
+
+    // Get context
+    const ctx = this.canvas.getContext("2d");
+    if (!ctx) {
+      throw new Error("Failed to get canvas context");
+    }
+    this.ctx = ctx;
+
+    // Configure context for best quality rendering
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    if ("textRenderingOptimization" in ctx) {
+      (
+        ctx as unknown as { textRenderingOptimization: string }
+      ).textRenderingOptimization = "optimizeQuality";
+    }
+
+    // Initial size
+    this.updateSize();
+
+    // Setup resize observer
+    this.resizeObserver = new ResizeObserver(() => {
+      this.updateSize();
+    });
+    this.resizeObserver.observe(container);
 
     // Setup drag-to-scroll handler
     this.dragHandler = new DragHandler(this.canvas, {
       onDragStart: () => {
         cancelSnapAnimation(this.snapState);
+        this.stopRenderLoop();
       },
       onDragMove: (deltaX, deltaY) => {
         cancelSnapAnimation(this.snapState);
         const bounds = getScrollBounds(
-          this.trackInfo,
+          this.songInfo,
           this.width,
           this.height,
           true
@@ -147,10 +205,11 @@ export default class PianoRollRenderer {
         );
         this.scrollX = clamped.scrollX;
         this.scrollY = clamped.scrollY;
+        this.scheduleRender();
       },
       onDragEnd: () => {
         const bounds = getScrollBounds(
-          this.trackInfo,
+          this.songInfo,
           this.width,
           this.height,
           false
@@ -160,6 +219,8 @@ export default class PianoRollRenderer {
           { scrollX: this.scrollX, scrollY: this.scrollY },
           bounds
         );
+        // Start continuous rendering for snap animation
+        this.startRenderLoop();
       },
     });
 
@@ -168,57 +229,138 @@ export default class PianoRollRenderer {
     this.canvas.addEventListener("mouseleave", this.handleMouseLeave);
     this.canvas.addEventListener("mousedown", this.handleMouseDown);
     this.canvas.addEventListener("mouseup", this.handleMouseUp);
-  }
 
-  setCrdt(crdt: Crdt): void {
-    if (this.unsubscribeCrdt) {
-      this.unsubscribeCrdt();
-    }
-
-    this.crdt = crdt;
-
-    // Subscribe to notes changes and update track directly
-    this.unsubscribeCrdt = crdt.subscribeNotes(() => {
-      this.updateNotesFromCrdt();
+    // Subscribe to CRDT changes - schedule render on any change
+    this.unsubscribeCrdt = crdt.subscribeChange(() => {
+      this.scheduleRender();
     });
 
-    this.updateNotesFromCrdt();
-  }
+    // Subscribe to CRDT BPM changes
+    this.unsubscribeBpm = crdt.subscribeBpm((bpm) => {
+      this.songConfig = { ...this.songConfig, bpm };
+      this.recalculateSongInfo();
+      this.scheduleRender();
+    });
 
-  private updateNotesFromCrdt(): void {
-    if (!this.crdt) return;
-    this.track = {
-      ...this.trackConfig,
-      notes: this.crdt.getNotesByPitch(),
+    // Initial load
+    this.songConfig = {
+      ...this.songConfig,
+      bpm: crdt.getBpmValue() || 120,
     };
-  }
+    this.recalculateSongInfo();
 
-  render(config: TrackConfig) {
-    this.trackConfig = config;
-    this.track = { ...config, notes: this.crdt?.getNotesByPitch() ?? [] };
-    if (this.track.length === 0) return;
-    this.recalculateTrackInfo();
+    // Mark as active and schedule initial render
     this.destroyed = false;
-    requestAnimationFrame(() => this.innerLoop());
+    this.scheduleRender();
   }
 
-  destroy() {
+  /**
+   * Unmount the renderer from its container
+   */
+  unmount(): void {
     this.destroyed = true;
-    this.dragHandler.destroy();
-    this.canvas.removeEventListener("mousemove", this.handleMouseMove);
-    this.canvas.removeEventListener("mouseleave", this.handleMouseLeave);
-    this.canvas.removeEventListener("mousedown", this.handleMouseDown);
-    this.canvas.removeEventListener("mouseup", this.handleMouseUp);
+    this.renderLoopRunning = false;
+
+    // Remove event listeners
+    if (this.canvas) {
+      this.canvas.removeEventListener("mousemove", this.handleMouseMove);
+      this.canvas.removeEventListener("mouseleave", this.handleMouseLeave);
+      this.canvas.removeEventListener("mousedown", this.handleMouseDown);
+      this.canvas.removeEventListener("mouseup", this.handleMouseUp);
+    }
+
+    // Cleanup drag handler
+    if (this.dragHandler) {
+      this.dragHandler.destroy();
+      this.dragHandler = null;
+    }
+
+    // Cleanup resize observer
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
 
     // Unsubscribe from CRDT
     if (this.unsubscribeCrdt) {
       this.unsubscribeCrdt();
       this.unsubscribeCrdt = null;
     }
-    this.crdt = null;
+
+    // Unsubscribe from store
+    if (this.unsubscribeBpm) {
+      this.unsubscribeBpm();
+      this.unsubscribeBpm = null;
+    }
+
+    // Remove canvas from container
+    if (this.canvas && this.container) {
+      this.container.removeChild(this.canvas);
+    }
+
+    this.canvas = null;
+    this.ctx = null;
+    this.container = null;
+  }
+
+  /**
+   * Schedule a render on the next animation frame
+   * Only schedules if not already scheduled to avoid redundant renders
+   */
+  private scheduleRender(): void {
+    if (this.renderScheduled || this.destroyed) return;
+
+    this.renderScheduled = true;
+    requestAnimationFrame(() => {
+      this.renderScheduled = false;
+      if (!this.destroyed) {
+        this.render();
+      }
+    });
+  }
+
+  private updateSize(): void {
+    if (!this.container || !this.canvas || !this.ctx) return;
+
+    const width = this.container.clientWidth;
+    const height = this.container.clientHeight;
+
+    // Set canvas resolution for high-DPI displays
+    const dpr = window.devicePixelRatio || 1;
+    this.canvas.width = width * dpr;
+    this.canvas.height = height * dpr;
+    this.canvas.style.width = `${width}px`;
+    this.canvas.style.height = `${height}px`;
+
+    // Scale context for high-DPI displays
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
+    this.ctx.scale(dpr, dpr);
+
+    // Configure context for best quality rendering
+    this.ctx.imageSmoothingEnabled = true;
+    this.ctx.imageSmoothingQuality = "high";
+
+    this.width = width;
+    this.height = height;
+
+    // Schedule a render after size change
+    this.scheduleRender();
+  }
+
+  private recalculateSongInfo(): void {
+    const totalBeats = (this.songConfig.length * this.songConfig.bpm) / 60;
+    const beatsPerBar = this.songConfig.timeSignature[0];
+    const bars = totalBeats / beatsPerBar;
+    this.songInfo.lengthInPixels = bars * TIME_RULER_WIDTH;
+    this.songInfo.totalBars = bars;
+    this.songInfo.beatHeightInPixels = BEAT_SIZE;
+    this.songInfo.barHeightInPixels =
+      this.songInfo.beatHeightInPixels * beatsPerBar;
   }
 
   private handleMouseMove = (event: MouseEvent) => {
+    if (!this.canvas) return;
+
     const rect = this.canvas.getBoundingClientRect();
     this.mouseX = event.clientX - rect.left;
     this.mouseY = event.clientY - rect.top;
@@ -227,9 +369,11 @@ export default class PianoRollRenderer {
       // Handle resize drag
       this.handleResizeDrag();
       this.updateCursor();
+      this.scheduleRender();
     } else {
       this.updateHoveredNote();
       this.updateCursor();
+      this.scheduleRender();
     }
 
     // Update note creation end beat during drag
@@ -238,6 +382,7 @@ export default class PianoRollRenderer {
       const cellHeight = BEAT_SIZE + NOTE_SPACING_Y;
       const relativeY = this.mouseY - offsetY;
       this.noteCreationEndBeat = Math.round(relativeY / cellHeight);
+      this.scheduleRender();
     }
   };
 
@@ -245,8 +390,6 @@ export default class PianoRollRenderer {
     this.mouseX = null;
     this.mouseY = null;
     this.hoveredNoteId = null;
-    this.hoveredNotePitch = null;
-    this.hoveredNoteStartTime = null;
     this.hoveredResizeHandle = null;
 
     // Cancel note creation if leaving canvas mid-drag
@@ -265,11 +408,11 @@ export default class PianoRollRenderer {
     }
 
     this.updateCursor();
+    this.scheduleRender();
   };
 
   private handleResizeDrag(): void {
     if (
-      !this.crdt ||
       !this.resizingNoteId ||
       this.mouseY === null ||
       this.resizingHandle === null ||
@@ -284,8 +427,7 @@ export default class PianoRollRenderer {
     const relativeY = this.mouseY - offsetY;
     const targetBeat = Math.round(relativeY / cellHeight);
 
-    const notesMap = this.crdt.getNotesMap();
-    const noteData = notesMap.get(this.resizingNoteId);
+    const noteData = crdt.getNote(this.resizingNoteId);
     if (!noteData) return;
 
     // Handle edge case: if original duration was 1, allow resizing in either direction
@@ -300,7 +442,7 @@ export default class PianoRollRenderer {
         1;
       const newDuration = Math.max(1, endTime - newStartTime + 1);
 
-      this.crdt.updateNote(this.resizingNoteId, {
+      crdt.updateNote(this.resizingNoteId, {
         startTime: newStartTime,
         duration: newDuration,
       });
@@ -308,27 +450,24 @@ export default class PianoRollRenderer {
       if (wasSingleBeat) {
         // For single beat notes resizing from "end" handle,
         // allow resizing in either direction based on mouse position
-        // For single-beat notes: originalEndTime = originalStartTime
 
         if (targetBeat < this.resizingNoteOriginalStartTime) {
           // Resizing backwards (upward): move startTime and keep duration 1
           const newStartTime = Math.max(0, targetBeat);
-          this.crdt.updateNote(this.resizingNoteId, {
+          crdt.updateNote(this.resizingNoteId, {
             startTime: newStartTime,
             duration: 1,
           });
         } else if (targetBeat > this.resizingNoteOriginalStartTime) {
           // Resizing forwards (downward): keep startTime, increase duration
-          // For single-beat notes, any targetBeat > originalStartTime means extend down
           const newDuration = Math.max(
             1,
             targetBeat - this.resizingNoteOriginalStartTime + 1
           );
-          this.crdt.updateNote(this.resizingNoteId, {
+          crdt.updateNote(this.resizingNoteId, {
             duration: newDuration,
           });
         }
-        // else: targetBeat == originalStartTime (same position) - don't change anything
       } else {
         // Normal resize from end: update duration only
         const newEndTime = Math.max(
@@ -340,7 +479,7 @@ export default class PianoRollRenderer {
           newEndTime - this.resizingNoteOriginalStartTime + 1
         );
 
-        this.crdt.updateNote(this.resizingNoteId, {
+        crdt.updateNote(this.resizingNoteId, {
           duration: newDuration,
         });
       }
@@ -348,6 +487,8 @@ export default class PianoRollRenderer {
   }
 
   private updateCursor(): void {
+    if (!this.canvas) return;
+
     if (this.isResizingNote) {
       this.canvas.style.cursor = "ns-resize";
     } else if (this.hoveredResizeHandle !== null) {
@@ -361,11 +502,9 @@ export default class PianoRollRenderer {
 
   private updateHoveredNote(): void {
     this.hoveredNoteId = null;
-    this.hoveredNotePitch = null;
-    this.hoveredNoteStartTime = null;
     this.hoveredResizeHandle = null;
 
-    if (!this.crdt || this.mouseX === null || this.mouseY === null) return;
+    if (this.mouseX === null || this.mouseY === null) return;
 
     // Only check if mouse is in content area
     if (this.mouseX < TIME_RULER_WIDTH || this.mouseY < PITCH_RULER_HEIGHT) {
@@ -388,22 +527,24 @@ export default class PianoRollRenderer {
     const pitchIndex = Math.round(relativeX / cellWidth);
     if (pitchIndex < 0) return;
 
-    // Get all notes and find which one is hovered
-    const notesMap = this.crdt.getNotesMap();
+    // Get notes for active track directly from crdt
+    const noteIdsByPitch = crdt.getNoteIdsByPitch(this.activeTrackIndex);
     const handleHitRadius = BEAT_SIZE / 3; // Radius for detecting handle hover
 
-    for (const [noteId, noteData] of notesMap) {
-      // Check if this note matches the pitch column
-      if (noteData.pitch !== pitchIndex) continue;
+    // Check notes at this pitch
+    const noteIds = noteIdsByPitch[pitchIndex] || [];
+    for (const noteId of noteIds) {
+      const noteData = crdt.getNote(noteId);
+      if (!noteData) continue;
 
       // Calculate note bounds (endTime is inclusive: startTime + duration - 1)
       const noteStartY =
         noteData.startTime *
-          (this.trackInfo.beatHeightInPixels + NOTE_SPACING_Y) -
+          (this.songInfo.beatHeightInPixels + NOTE_SPACING_Y) -
         BEAT_SIZE / 2;
       const noteEndY =
         (noteData.startTime + noteData.duration - 1) *
-          (this.trackInfo.beatHeightInPixels + NOTE_SPACING_Y) +
+          (this.songInfo.beatHeightInPixels + NOTE_SPACING_Y) +
         BEAT_SIZE / 2;
 
       // Check if mouse is within the note vertical bounds
@@ -413,8 +554,6 @@ export default class PianoRollRenderer {
       ) {
         // Found the hovered note
         this.hoveredNoteId = noteId;
-        this.hoveredNotePitch = noteData.pitch;
-        this.hoveredNoteStartTime = noteData.startTime;
 
         // Check if mouse is near the start or end handle
         const distanceToStart = Math.abs(relativeY - noteStartY);
@@ -432,17 +571,14 @@ export default class PianoRollRenderer {
   }
 
   private handleMouseDown = (event: MouseEvent) => {
+    if (!this.canvas) return;
+
     // Only handle left-click
     if (event.button !== 0) return;
 
     // If clicking on a resize handle, start resizing
-    if (
-      this.hoveredResizeHandle !== null &&
-      this.hoveredNoteId !== null &&
-      this.crdt
-    ) {
-      const notesMap = this.crdt.getNotesMap();
-      const noteData = notesMap.get(this.hoveredNoteId);
+    if (this.hoveredResizeHandle !== null && this.hoveredNoteId !== null) {
+      const noteData = crdt.getNote(this.hoveredNoteId);
       if (noteData) {
         this.isResizingNote = true;
         this.resizingNoteId = this.hoveredNoteId;
@@ -455,8 +591,8 @@ export default class PianoRollRenderer {
     }
 
     // If clicking on an existing note (not on resize handle), delete it
-    if (this.hoveredNoteId !== null && this.crdt) {
-      this.crdt.deleteNote(this.hoveredNoteId);
+    if (this.hoveredNoteId !== null) {
+      crdt.deleteNote(this.hoveredNoteId);
       return;
     }
 
@@ -507,6 +643,7 @@ export default class PianoRollRenderer {
       this.resizingNoteOriginalStartTime = null;
       this.resizingNoteOriginalDuration = null;
       this.updateCursor();
+      this.scheduleRender();
       return;
     }
 
@@ -531,40 +668,76 @@ export default class PianoRollRenderer {
 
     const userId = getUserId()!;
     const noteData: NoteData = {
-      id: this.crdt!.generateNoteId(userId),
+      id: crdt.generateNoteId(userId),
       pitch,
       startTime: minBeat,
       duration,
       velocity: 100,
       createdAt: Date.now(),
       createdBy: userId,
+      trackIndex: this.activeTrackIndex,
     };
 
-    this.crdt?.addNote(noteData);
+    crdt.addNote(noteData);
   };
 
-  private recalculateTrackInfo() {
-    const totalBeats = (this.track.length * this.track.bpm) / 60;
-    const beatsPerBar = this.track.timeSignature[0];
-    const bars = totalBeats / beatsPerBar;
-    this.trackInfo.lengthInPixels = bars * TIME_RULER_WIDTH;
-    this.trackInfo.totalBars = bars;
-    this.trackInfo.beatHeightInPixels = BEAT_SIZE;
-    this.trackInfo.barHeightInPixels =
-      this.trackInfo.beatHeightInPixels * beatsPerBar;
+  /**
+   * Start the continuous render loop for animations
+   * Only runs when snap animations are active
+   */
+  private startRenderLoop(): void {
+    if (this.renderLoopRunning || this.destroyed) return;
+    this.renderLoopRunning = true;
+    this.innerLoop();
   }
 
-  private innerLoop() {
-    if (this.destroyed) return;
+  /**
+   * Stop the continuous render loop
+   */
+  private stopRenderLoop(): void {
+    this.renderLoopRunning = false;
+  }
 
-    // Update snap-back animation
-    const newScroll = updateSnapAnimation(
-      this.snapState,
-      { scrollX: this.scrollX, scrollY: this.scrollY },
-      performance.now()
-    );
-    this.scrollX = newScroll.scrollX;
-    this.scrollY = newScroll.scrollY;
+  /**
+   * Continuous render loop for animations
+   * Checks if animation is still running and stops if not needed
+   */
+  private innerLoop(): void {
+    if (!this.renderLoopRunning || this.destroyed || !this.ctx) return;
+
+    // Render the frame
+    this.render();
+
+    // Check if we need to continue the loop
+    // Keep running if snap animation is active
+    if (this.snapState.isSnapping) {
+      requestAnimationFrame(() => this.innerLoop());
+    } else {
+      this.renderLoopRunning = false;
+    }
+  }
+
+  /**
+   * Render a single frame
+   */
+  private render(): void {
+    if (this.destroyed || !this.ctx) return;
+
+    // Update snap-back animation if active
+    if (this.snapState.isSnapping) {
+      const newScroll = updateSnapAnimation(
+        this.snapState,
+        { scrollX: this.scrollX, scrollY: this.scrollY },
+        performance.now()
+      );
+      this.scrollX = newScroll.scrollX;
+      this.scrollY = newScroll.scrollY;
+
+      // If animation is still running, ensure loop continues
+      if (this.snapState.isSnapping && !this.renderLoopRunning) {
+        this.startRenderLoop();
+      }
+    }
 
     const ctx = this.ctx;
     // clear
@@ -574,55 +747,80 @@ export default class PianoRollRenderer {
     const offsetX = TIME_RULER_WIDTH + this.scrollX;
     const offsetY = PITCH_RULER_HEIGHT + this.scrollY;
 
-    renderBackground(
+    renderFns.renderBackground(
       ctx,
-      this.trackInfo,
+      this.songInfo,
       this.width,
       this.height,
       offsetX,
       offsetY
     );
-    renderNoteGrid(ctx, offsetX, offsetY);
-    renderNotes(
+
+    // Get notes for active track directly from crdt for rendering
+    const noteIdsByPitch = crdt.getNoteIdsByPitch(this.activeTrackIndex);
+    const trackConfig = crdt.getTrackConfig(this.activeTrackIndex);
+    const accentColor = trackConfig?.accentColor || "#00ff88"; // fallback color
+
+    renderFns.renderNotes(
       ctx,
-      this.track,
-      this.trackInfo,
+      this.songConfig,
+      this.songInfo,
+      noteIdsByPitch,
+      crdt,
       offsetX,
       offsetY,
-      this.hoveredNotePitch,
-      this.hoveredNoteStartTime
+      this.hoveredNoteId,
+      accentColor
     );
 
     // Render note creation preview during drag
-    if (
-      this.isCreatingNote &&
-      this.noteCreationPitch !== null &&
-      this.noteCreationStartBeat !== null &&
-      this.noteCreationEndBeat !== null
-    ) {
-      renderNoteCreationPreview(
-        ctx,
-        this.trackInfo,
-        offsetX,
-        offsetY,
-        this.noteCreationPitch,
-        this.noteCreationStartBeat,
-        this.noteCreationEndBeat
-      );
+    if (this.isCreatingNote) {
+      if (
+        this.noteCreationPitch !== null &&
+        this.noteCreationStartBeat !== null &&
+        this.noteCreationEndBeat !== null
+      ) {
+        renderFns.renderNoteCreationPreview(
+          ctx,
+          this.songInfo,
+          offsetX,
+          offsetY,
+          this.noteCreationPitch,
+          this.noteCreationStartBeat,
+          this.noteCreationEndBeat,
+          accentColor
+        );
+      } else {
+        console.error("Note creation state is invalid");
+      }
     }
 
+    // Render mouse placeholder if not creating note and not hovering over a note
     if (
       this.mouseX !== null &&
       this.mouseY !== null &&
       !this.isCreatingNote &&
       !this.hoveredNoteId
     ) {
-      renderMousePlaceholder(ctx, this.mouseX, this.mouseY, offsetX, offsetY);
+      renderFns.renderMousePlaceholder(
+        ctx,
+        this.mouseX,
+        this.mouseY,
+        offsetX,
+        offsetY,
+        accentColor
+      );
     }
 
-    renderTimeRuler(ctx, this.track, this.trackInfo, this.height, offsetY);
-    renderPitchRuler(ctx, this.width);
-
-    requestAnimationFrame(() => this.innerLoop());
+    renderFns.renderPitchRuler(ctx, offsetX);
+    renderFns.renderTimeRuler(
+      ctx,
+      this.songConfig,
+      this.songInfo,
+      this.height,
+      offsetY
+    );
   }
 }
+
+export const EDITOR_CONTROLLER = PianoRollController.getInstance();

@@ -1,13 +1,15 @@
 import type { StateCreator } from "zustand";
-import { Crdt } from "@/lib/crdt";
+import { Crdt, type TrackConfig } from "@/lib/crdt";
 import { WS_CLIENT } from "@/lib/websocket";
 import type { ServerMessage } from "@/types/server";
 import type { NoteData } from "@/lib/piano-roll-renderer/types";
+import { EDITOR_CONTROLLER } from "@/lib/piano-roll-renderer";
 
 export interface SynthesizedSlice {
   // State
   bpm: number;
   activeChannel: number;
+  trackConfigs: TrackConfig[];
 
   crdt: Crdt;
 
@@ -15,11 +17,14 @@ export interface SynthesizedSlice {
   incrementBpm: (bpm: number) => void;
   decrementBpm: (bpm: number) => void;
   setActiveChannel: (channelId: number) => void;
+  setTrackConfig: (trackIndex: number, config: Partial<TrackConfig>) => void;
 
   // Notes Actions
   updateNote: (
     noteId: string,
-    updates: Partial<Omit<NoteData, "id" | "createdAt" | "createdBy">>
+    updates: Partial<
+      Omit<NoteData, "id" | "createdAt" | "createdBy" | "trackIndex">
+    >
   ) => void;
   deleteNote: (noteId: string) => void;
 }
@@ -33,8 +38,14 @@ export const createSynthesizedSlice: StateCreator<
   SynthesizedSlice
 > = (set) => {
   // Subscribe to BPM changes
-  crdt.getBpm().subscribe(() => {
-    set({ bpm: crdt.getBpm().value });
+  crdt.subscribeBpm((bpm) => {
+    set({ bpm });
+  });
+
+  // Subscribe to any CRDT changes to update track configs
+  crdt.subscribeChange(() => {
+    const trackConfigs = crdt.getAllTrackConfigs();
+    set({ trackConfigs });
   });
 
   crdt.on("commit", (event) => {
@@ -67,6 +78,7 @@ export const createSynthesizedSlice: StateCreator<
     // Initial state
     bpm: 0,
     activeChannel: 0,
+    trackConfigs: crdt.getAllTrackConfigs(),
 
     // CRDT instance for direct access
     crdt,
@@ -80,6 +92,10 @@ export const createSynthesizedSlice: StateCreator<
     },
     setActiveChannel: (channelId: number) => {
       set({ activeChannel: channelId });
+      EDITOR_CONTROLLER.setActiveTrackIndex(channelId);
+    },
+    setTrackConfig: (trackIndex: number, config: Partial<TrackConfig>) => {
+      crdt.setTrackConfig(trackIndex, config);
     },
 
     // Notes Actions

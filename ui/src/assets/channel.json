@@ -1,68 +1,82 @@
 {
   "channels": [
     {
+      "id": 0,
       "name": "Acoustic Piano",
       "channel": 1
     },
-
     {
+      "id": 1,
       "name": "Acoustic Guitar",
       "channel": 25
     },
     {
+      "id": 2,
       "name": "Trumpet",
       "channel": 57
     },
     {
+      "id": 3,
       "name": "Acoustic Drum Kit",
       "channel": 10
     },
     {
+      "id": 4,
       "name": "Electric Drum Kit",
       "channel": 10
     },
     {
+      "id": 5,
       "name": "FX Percussion",
       "channel": 10
     },
     {
+      "id": 6,
       "name": "Electric Bass",
       "channel": 34
     },
     {
+      "id": 7,
       "name": "Synth Bass",
       "channel": 39
     },
-
     {
+      "id": 8,
       "name": "Electric Piano",
       "channel": 5
     },
     {
+      "id": 9,
       "name": "Polysynth",
       "channel": 91
     },
     {
+      "id": 10,
       "name": "Square",
       "channel": 81
     },
     {
+      "id": 11,
       "name": "String Ensemble",
       "channel": 49
     },
     {
+      "id": 12,
       "name": "Choir",
       "channel": 92
     },
     {
+      "id": 13,
       "name": "Ocarina",
       "channel": 80
     },
     {
+      "id": 14,
       "name": "Choir Aahs",
       "channel": 53
     },
     {
+      "id": 15,
       "name": "Flute",
       "channel": 74
     }

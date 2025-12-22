@@ -1,17 +1,27 @@
-import { TIME_RULER_WIDTH, PITCH_RULER_HEIGHT } from "@/config";
-import type { TrackInfo, ScrollState, ScrollBounds } from "./types";
+import {
+  TIME_RULER_WIDTH,
+  PITCH_RULER_HEIGHT,
+  TOTAL_PITCHES,
+  BEAT_SIZE,
+  NOTE_SPACING_X,
+} from "@/config";
+import type { SongInfo, ScrollState, ScrollBounds } from "./types";
 
 export function getScrollBounds(
-  trackInfo: TrackInfo,
+  songInfo: SongInfo,
   viewportWidth: number,
   viewportHeight: number,
   includeOverscroll: boolean = false
 ): ScrollBounds {
-  const contentHeight = trackInfo.lengthInPixels;
+  const contentHeight = songInfo.lengthInPixels;
   const effectiveViewportHeight = viewportHeight - PITCH_RULER_HEIGHT;
   const minScrollY = Math.min(0, -(contentHeight - effectiveViewportHeight));
 
-  const contentWidth = trackInfo.lengthInPixels;
+  // Calculate actual content width based on number of pitches
+  // Each pitch takes up (BEAT_SIZE + NOTE_SPACING_X * 2) pixels, plus initial offset
+  const cellWidth = BEAT_SIZE + NOTE_SPACING_X * 2;
+  const initialOffset = 10 + NOTE_SPACING_X * 2;
+  const contentWidth = initialOffset + TOTAL_PITCHES * cellWidth;
   const effectiveViewportWidth = viewportWidth - TIME_RULER_WIDTH;
   const minScrollX = Math.min(0, -(contentWidth - effectiveViewportWidth));
 

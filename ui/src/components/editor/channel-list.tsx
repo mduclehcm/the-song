@@ -18,6 +18,7 @@ import {
   useSynthesizedActions,
   useTrackConfigs,
 } from "@/store/store";
+import { Button } from "@/components/ui/button";
 
 import ChannelConfigDialog from "./channel-config-dialog";
 
@@ -90,11 +91,13 @@ export default function ChannelList({
               <div
                 key={index}
                 style={{ "--accent": accentColor } as React.CSSProperties}
+                className="group"
               >
-                <button
+                <Button
+                  variant="outline"
                   onClick={() => handleChannelClick(index)}
                   className={cn(
-                    "w-full flex items-center gap-3 p-3 border-2 text-foreground transition-all duration-200 relative overflow-hidden",
+                    "w-full h-auto flex items-center justify-start gap-3 p-3 border-2 text-foreground transition-all duration-200 relative overflow-hidden",
                     "hover:bg-accent/10 hover:border-accent",
                     activeChannel === index
                       ? "bg-accent/20 border-accent"
@@ -116,18 +119,21 @@ export default function ChannelList({
                       MIDI Channel {channel.channel}
                     </span>
                   </div>
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
                     onClick={(e) => handleConfigClick(e, index)}
                     className={cn(
-                      "p-1.5 rounded-md transition-colors",
+                      "transition-all duration-200",
                       "hover:bg-accent/20 hover:text-accent",
-                      "text-muted-foreground"
+                      "text-muted-foreground",
+                      "opacity-0 group-hover:opacity-100"
                     )}
                     title="Channel settings"
                   >
                     <Settings className="w-4 h-4" />
-                  </button>
-                </button>
+                  </Button>
+                </Button>
               </div>
             );
           })}

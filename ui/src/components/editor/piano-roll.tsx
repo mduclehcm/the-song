@@ -1,5 +1,4 @@
 import { EDITOR_CONTROLLER } from "@/lib/piano-roll-renderer";
-import { midiPlayer } from "@/lib/midi-player";
 import { useEffect, useRef } from "react";
 
 export default function PianoRollEditor() {

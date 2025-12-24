@@ -94,6 +94,7 @@ export default function ChannelList({
                 className="group"
               >
                 <Button
+                  asChild
                   variant="outline"
                   onClick={() => handleChannelClick(index)}
                   className={cn(
@@ -104,35 +105,39 @@ export default function ChannelList({
                       : "bg-background border-border"
                   )}
                 >
-                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent" />
-                  <Icon
-                    className={cn(
-                      "w-5 h-5 shrink-0",
-                      activeChannel === index
-                        ? "text-accent"
-                        : "text-muted-foreground"
-                    )}
-                  />
-                  <div className="flex flex-col items-start flex-1">
-                    <span className="text-sm font-medium">{channel.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      MIDI Channel {channel.channel}
-                    </span>
+                  <div>
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-accent" />
+                    <Icon
+                      className={cn(
+                        "w-5 h-5 shrink-0",
+                        activeChannel === index
+                          ? "text-accent"
+                          : "text-muted-foreground"
+                      )}
+                    />
+                    <div className="flex flex-col items-start flex-1">
+                      <span className="text-sm font-medium">
+                        {channel.name}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        MIDI Channel {channel.channel}
+                      </span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={(e) => handleConfigClick(e, index)}
+                      className={cn(
+                        "transition-all duration-200",
+                        "hover:bg-accent/20 hover:text-accent",
+                        "text-muted-foreground",
+                        "opacity-0 group-hover:opacity-100"
+                      )}
+                      title="Channel settings"
+                    >
+                      <Settings className="w-4 h-4" />
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={(e) => handleConfigClick(e, index)}
-                    className={cn(
-                      "transition-all duration-200",
-                      "hover:bg-accent/20 hover:text-accent",
-                      "text-muted-foreground",
-                      "opacity-0 group-hover:opacity-100"
-                    )}
-                    title="Channel settings"
-                  >
-                    <Settings className="w-4 h-4" />
-                  </Button>
                 </Button>
               </div>
             );

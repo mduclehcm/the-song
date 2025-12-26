@@ -8,17 +8,12 @@ import {
 } from "@/config";
 import { getUserId } from "@/store/store";
 import { crdt } from "@/store/slices/synthesized-slice";
+import { midiPlayer } from "@/lib/midi-player";
 
-import { DragHandler } from "./drag-handler";
 import * as renderers from "./renderers";
-import { clampScroll, getScrollBounds } from "./scroll-utils";
-import {
-  type SnapAnimationState,
-  cancelSnapAnimation,
-  createSnapAnimationState,
-  startSnapBack,
-  updateSnapAnimation,
-} from "./snap-animation";
+import type { RenderBoundary } from "./types";
+import { ScrollController } from "./scroll-controller";
+import { getScrollBounds } from "./scroll-utils";
 import type { NoteData, SongConfig, SongInfo } from "./types";
 
 // HMR support: store renderer functions in a mutable object
@@ -52,6 +47,11 @@ class PianoRollController {
   private container: HTMLElement | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
+
+  // Double buffering: offscreen canvas for rendering
+  private offscreenCanvas: HTMLCanvasElement | null = null;
+  private offscreenCtx: CanvasRenderingContext2D | null = null;
+
   private width: number = 0;
   private height: number = 0;
   private destroyed: boolean = true;
@@ -64,13 +64,8 @@ class PianoRollController {
   private unsubscribeBpm: (() => void) | null = null;
   private resizeObserver: ResizeObserver | null = null;
 
-  // Scroll state
-  private scrollX: number = 0;
-  private scrollY: number = 0;
-
   // Handlers
-  private dragHandler: DragHandler | null = null;
-  private snapState: SnapAnimationState;
+  private scrollController: ScrollController;
 
   // Mouse position state
   private mouseX: number | null = null;
@@ -110,7 +105,19 @@ class PianoRollController {
       beatHeightInPixels: 0,
       barHeightInPixels: 0,
     };
-    this.snapState = createSnapAnimationState();
+    this.scrollController = new ScrollController({
+      onScrollChange: () => this.scheduleRender(),
+      onDragStart: () => this.stopRenderLoop(),
+      onSnapStart: () => this.startRenderLoop(),
+      onSnapEnd: () => {},
+      getScrollBounds: (includeOverscroll) =>
+        getScrollBounds(
+          this.songInfo,
+          this.width,
+          this.height,
+          includeOverscroll
+        ),
+    });
   }
 
   static getInstance(): PianoRollController {
@@ -157,19 +164,29 @@ class PianoRollController {
     this.canvas.style.display = "block";
     container.appendChild(this.canvas);
 
-    // Get context
-    const ctx = this.canvas.getContext("2d");
+    // Get context for visible canvas
+    const ctx = this.canvas.getContext("2d", { alpha: false });
     if (!ctx) {
       throw new Error("Failed to get canvas context");
     }
     this.ctx = ctx;
 
-    // Configure context for best quality rendering
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    if ("textRenderingOptimization" in ctx) {
+    // Create offscreen canvas for double buffering
+    this.offscreenCanvas = document.createElement("canvas");
+    const offscreenCtx = this.offscreenCanvas.getContext("2d", {
+      alpha: false,
+    });
+    if (!offscreenCtx) {
+      throw new Error("Failed to get offscreen canvas context");
+    }
+    this.offscreenCtx = offscreenCtx;
+
+    // Configure offscreen context for best quality rendering
+    offscreenCtx.imageSmoothingEnabled = true;
+    offscreenCtx.imageSmoothingQuality = "high";
+    if ("textRenderingOptimization" in offscreenCtx) {
       (
-        ctx as unknown as { textRenderingOptimization: string }
+        offscreenCtx as unknown as { textRenderingOptimization: string }
       ).textRenderingOptimization = "optimizeQuality";
     }
 
@@ -182,47 +199,8 @@ class PianoRollController {
     });
     this.resizeObserver.observe(container);
 
-    // Setup drag-to-scroll handler
-    this.dragHandler = new DragHandler(this.canvas, {
-      onDragStart: () => {
-        cancelSnapAnimation(this.snapState);
-        this.stopRenderLoop();
-      },
-      onDragMove: (deltaX, deltaY) => {
-        cancelSnapAnimation(this.snapState);
-        const bounds = getScrollBounds(
-          this.songInfo,
-          this.width,
-          this.height,
-          true
-        );
-        const clamped = clampScroll(
-          {
-            scrollX: this.scrollX + deltaX,
-            scrollY: this.scrollY + deltaY,
-          },
-          bounds
-        );
-        this.scrollX = clamped.scrollX;
-        this.scrollY = clamped.scrollY;
-        this.scheduleRender();
-      },
-      onDragEnd: () => {
-        const bounds = getScrollBounds(
-          this.songInfo,
-          this.width,
-          this.height,
-          false
-        );
-        startSnapBack(
-          this.snapState,
-          { scrollX: this.scrollX, scrollY: this.scrollY },
-          bounds
-        );
-        // Start continuous rendering for snap animation
-        this.startRenderLoop();
-      },
-    });
+    // Setup scroll controller for drag-to-scroll and wheel scroll
+    this.scrollController.attach(this.canvas);
 
     // Setup mouse handlers
     this.canvas.addEventListener("mousemove", this.handleMouseMove);
@@ -269,11 +247,8 @@ class PianoRollController {
       this.canvas.removeEventListener("mouseup", this.handleMouseUp);
     }
 
-    // Cleanup drag handler
-    if (this.dragHandler) {
-      this.dragHandler.destroy();
-      this.dragHandler = null;
-    }
+    // Cleanup scroll controller
+    this.scrollController.detach();
 
     // Cleanup resize observer
     if (this.resizeObserver) {
@@ -297,6 +272,10 @@ class PianoRollController {
     if (this.canvas && this.container) {
       this.container.removeChild(this.canvas);
     }
+
+    // Cleanup offscreen canvas
+    this.offscreenCanvas = null;
+    this.offscreenCtx = null;
 
     this.canvas = null;
     this.ctx = null;
@@ -327,6 +306,8 @@ class PianoRollController {
 
     // Set canvas resolution for high-DPI displays
     const dpr = window.devicePixelRatio || 1;
+
+    // Update visible canvas
     this.canvas.width = width * dpr;
     this.canvas.height = height * dpr;
     this.canvas.style.width = `${width}px`;
@@ -336,26 +317,49 @@ class PianoRollController {
     this.ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform
     this.ctx.scale(dpr, dpr);
 
-    // Configure context for best quality rendering
-    this.ctx.imageSmoothingEnabled = true;
-    this.ctx.imageSmoothingQuality = "high";
+    // Update offscreen canvas to match
+    if (this.offscreenCanvas && this.offscreenCtx) {
+      this.offscreenCanvas.width = width * dpr;
+      this.offscreenCanvas.height = height * dpr;
+
+      // Scale offscreen context for high-DPI displays
+      this.offscreenCtx.setTransform(1, 0, 0, 1, 0, 0);
+      this.offscreenCtx.scale(dpr, dpr);
+
+      // Reconfigure offscreen context for best quality rendering
+      this.offscreenCtx.imageSmoothingEnabled = true;
+      this.offscreenCtx.imageSmoothingQuality = "high";
+    }
 
     this.width = width;
     this.height = height;
 
-    // Schedule a render after size change
-    this.scheduleRender();
+    // Render immediately to prevent flash
+    // This ensures the canvas is never shown in a cleared state
+    this.render();
   }
 
   private recalculateSongInfo(): void {
     const totalBeats = (this.songConfig.length * this.songConfig.bpm) / 60;
     const beatsPerBar = this.songConfig.timeSignature[0];
     const bars = totalBeats / beatsPerBar;
-    this.songInfo.lengthInPixels = bars * TIME_RULER_WIDTH;
+
     this.songInfo.totalBars = bars;
     this.songInfo.beatHeightInPixels = BEAT_SIZE;
+    // Bar height must match time-based calculation: beatsPerBar * (beatHeightInPixels + NOTE_SPACING_Y)
+    // This ensures bars align with time ruler ticks (e.g., 4 beats = 2 seconds at 120 BPM)
     this.songInfo.barHeightInPixels =
-      this.songInfo.beatHeightInPixels * beatsPerBar;
+      beatsPerBar * (this.songInfo.beatHeightInPixels + NOTE_SPACING_Y);
+
+    // Calculate total content height
+    // Using the actual time-based calculation to match the time ruler rendering
+    // pixelsPerSecond = (bpm/60) * (beatHeightInPixels + NOTE_SPACING_Y)
+    const pixelsPerSecond =
+      (this.songConfig.bpm / 60) * (BEAT_SIZE + NOTE_SPACING_Y);
+    const contentHeight = this.songConfig.length * pixelsPerSecond;
+    const bottomPadding = PITCH_RULER_HEIGHT; // Add padding at the bottom
+
+    this.songInfo.lengthInPixels = contentHeight + bottomPadding;
   }
 
   private handleMouseMove = (event: MouseEvent) => {
@@ -378,7 +382,7 @@ class PianoRollController {
 
     // Update note creation end beat during drag
     if (this.isCreatingNote && this.mouseY !== null) {
-      const offsetY = PITCH_RULER_HEIGHT + this.scrollY;
+      const offsetY = PITCH_RULER_HEIGHT + this.scrollController.getScrollY();
       const cellHeight = BEAT_SIZE + NOTE_SPACING_Y;
       const relativeY = this.mouseY - offsetY;
       this.noteCreationEndBeat = Math.round(relativeY / cellHeight);
@@ -422,7 +426,7 @@ class PianoRollController {
       return;
     }
 
-    const offsetY = PITCH_RULER_HEIGHT + this.scrollY;
+    const offsetY = PITCH_RULER_HEIGHT + this.scrollController.getScrollY();
     const cellHeight = BEAT_SIZE + NOTE_SPACING_Y;
     const relativeY = this.mouseY - offsetY;
     const targetBeat = Math.round(relativeY / cellHeight);
@@ -512,8 +516,8 @@ class PianoRollController {
     }
 
     // Calculate offsets
-    const offsetX = TIME_RULER_WIDTH + this.scrollX;
-    const offsetY = PITCH_RULER_HEIGHT + this.scrollY;
+    const offsetX = TIME_RULER_WIDTH + this.scrollController.getScrollX();
+    const offsetY = PITCH_RULER_HEIGHT + this.scrollController.getScrollY();
 
     // Calculate the grid cell size
     const cellWidth = BEAT_SIZE + NOTE_SPACING_X * 2;
@@ -537,15 +541,14 @@ class PianoRollController {
       const noteData = crdt.getNote(noteId);
       if (!noteData) continue;
 
-      // Calculate note bounds (endTime is inclusive: startTime + duration - 1)
+      // Calculate note bounds (note starts at startTime and spans duration beats)
       const noteStartY =
         noteData.startTime *
-          (this.songInfo.beatHeightInPixels + NOTE_SPACING_Y) -
-        BEAT_SIZE / 2;
-      const noteEndY =
-        (noteData.startTime + noteData.duration - 1) *
-          (this.songInfo.beatHeightInPixels + NOTE_SPACING_Y) +
-        BEAT_SIZE / 2;
+        (this.songInfo.beatHeightInPixels + NOTE_SPACING_Y);
+      const noteHeight =
+        this.songInfo.beatHeightInPixels * noteData.duration +
+        NOTE_SPACING_Y * Math.max(0, noteData.duration - 1);
+      const noteEndY = noteStartY + noteHeight;
 
       // Check if mouse is within the note vertical bounds
       if (
@@ -606,8 +609,8 @@ class PianoRollController {
     }
 
     // Calculate offsets
-    const offsetX = TIME_RULER_WIDTH + this.scrollX;
-    const offsetY = PITCH_RULER_HEIGHT + this.scrollY;
+    const offsetX = TIME_RULER_WIDTH + this.scrollController.getScrollX();
+    const offsetY = PITCH_RULER_HEIGHT + this.scrollController.getScrollY();
 
     // Calculate the grid cell size
     const cellWidth = BEAT_SIZE + NOTE_SPACING_X * 2;
@@ -709,8 +712,8 @@ class PianoRollController {
     this.render();
 
     // Check if we need to continue the loop
-    // Keep running if snap animation is active
-    if (this.snapState.isSnapping) {
+    // Keep running if snap animation is active or playback is running
+    if (this.scrollController.isSnapping() || midiPlayer.getIsPlaying()) {
       requestAnimationFrame(() => this.innerLoop());
     } else {
       this.renderLoopRunning = false;
@@ -719,42 +722,37 @@ class PianoRollController {
 
   /**
    * Render a single frame
+   * Uses double buffering: renders to offscreen canvas, then copies to visible canvas
    */
   private render(): void {
-    if (this.destroyed || !this.ctx) return;
+    if (this.destroyed || !this.ctx || !this.offscreenCtx) return;
 
     // Update snap-back animation if active
-    if (this.snapState.isSnapping) {
-      const newScroll = updateSnapAnimation(
-        this.snapState,
-        { scrollX: this.scrollX, scrollY: this.scrollY },
-        performance.now()
-      );
-      this.scrollX = newScroll.scrollX;
-      this.scrollY = newScroll.scrollY;
+    if (this.scrollController.isSnapping()) {
+      this.scrollController.updateSnap();
 
       // If animation is still running, ensure loop continues
-      if (this.snapState.isSnapping && !this.renderLoopRunning) {
+      if (this.scrollController.isSnapping() && !this.renderLoopRunning) {
         this.startRenderLoop();
       }
     }
 
-    const ctx = this.ctx;
-    // clear
-    ctx.clearRect(0, 0, this.width, this.height);
+    // Render to offscreen canvas
+    const offscreenCtx = this.offscreenCtx;
 
-    // Calculate offsets for the main drawing area
-    const offsetX = TIME_RULER_WIDTH + this.scrollX;
-    const offsetY = PITCH_RULER_HEIGHT + this.scrollY;
+    // Clear offscreen canvas
+    offscreenCtx.clearRect(0, 0, this.width, this.height);
 
-    renderFns.renderBackground(
-      ctx,
-      this.songInfo,
-      this.width,
-      this.height,
-      offsetX,
-      offsetY
-    );
+    // Calculate the render boundary with scroll offsets
+    // x and y represent the content offset (scroll position + ruler dimensions)
+    const boundary: RenderBoundary = {
+      x: TIME_RULER_WIDTH + this.scrollController.getScrollX(),
+      y: PITCH_RULER_HEIGHT + this.scrollController.getScrollY(),
+      width: this.width,
+      height: this.height,
+    };
+
+    renderFns.renderBackground(offscreenCtx, boundary, this.songInfo);
 
     // Get notes for active track directly from crdt for rendering
     const noteIdsByPitch = crdt.getNoteIdsByPitch(this.activeTrackIndex);
@@ -762,13 +760,11 @@ class PianoRollController {
     const accentColor = trackConfig?.accentColor || "#00ff88"; // fallback color
 
     renderFns.renderNotes(
-      ctx,
-      this.songConfig,
+      offscreenCtx,
+      boundary,
       this.songInfo,
       noteIdsByPitch,
       crdt,
-      offsetX,
-      offsetY,
       this.hoveredNoteId,
       accentColor
     );
@@ -781,10 +777,9 @@ class PianoRollController {
         this.noteCreationEndBeat !== null
       ) {
         renderFns.renderNoteCreationPreview(
-          ctx,
+          offscreenCtx,
+          boundary,
           this.songInfo,
-          offsetX,
-          offsetY,
           this.noteCreationPitch,
           this.noteCreationStartBeat,
           this.noteCreationEndBeat,
@@ -803,23 +798,45 @@ class PianoRollController {
       !this.hoveredNoteId
     ) {
       renderFns.renderMousePlaceholder(
-        ctx,
+        offscreenCtx,
+        boundary,
         this.mouseX,
         this.mouseY,
-        offsetX,
-        offsetY,
         accentColor
       );
     }
 
-    renderFns.renderPitchRuler(ctx, offsetX);
+    // Render playhead if playing
+    if (midiPlayer.getIsPlaying()) {
+      const currentBeat = midiPlayer.getCurrentTimeInBeats();
+      renderFns.renderPlayhead(
+        offscreenCtx,
+        boundary,
+        this.songInfo,
+        currentBeat,
+        accentColor
+      );
+
+      // Keep render loop running while playing
+      if (!this.renderLoopRunning) {
+        this.startRenderLoop();
+      }
+    }
+
+    renderFns.renderPitchRuler(offscreenCtx, boundary);
     renderFns.renderTimeRuler(
-      ctx,
+      offscreenCtx,
+      boundary,
       this.songConfig,
-      this.songInfo,
-      this.height,
-      offsetY
+      this.songInfo
     );
+
+    // Copy offscreen canvas to visible canvas in one operation
+    // This is the key to double buffering - all rendering happens offscreen,
+    // then we do a single fast blit to the visible canvas
+    // We draw using logical pixels (width/height) not physical pixels
+    this.ctx.clearRect(0, 0, this.width, this.height);
+    this.ctx.drawImage(this.offscreenCanvas!, 0, 0, this.width, this.height);
   }
 }
 

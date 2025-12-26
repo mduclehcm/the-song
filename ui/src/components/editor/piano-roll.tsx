@@ -7,14 +7,10 @@ export default function PianoRollEditor() {
   useEffect(() => {
     if (containerRef.current) {
       EDITOR_CONTROLLER.mount(containerRef.current);
-      // TODO: find good sound samples for the synth before using it
-      // midiPlayer.init();
-      // midiPlayer.start();
     }
 
     return () => {
       EDITOR_CONTROLLER.unmount();
-      // midiPlayer.stop();
     };
   }, []);
 

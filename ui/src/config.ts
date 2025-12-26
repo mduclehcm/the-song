@@ -7,12 +7,12 @@ export const THROTTLE_COMMIT_DELAY = 100;
 // Total number of pitches (5 octaves * 12 notes per octave)
 export const TOTAL_PITCHES = 60;
 
-export const MIN_BPM = 90;
-export const MAX_BPM = 250;
+export const MIN_BPM = 60;
+export const MAX_BPM = 160;
 
-export const SONG_LEN_IN_SECONDS = 300;
+export const SONG_LEN_IN_SECONDS = 100;
 
-export const TIME_RULER_WIDTH = 40;
+export const TIME_RULER_WIDTH = 60;
 export const BEAT_SIZE = 25;
 export const BEAT_HALF_SIZE = BEAT_SIZE / 2;
 

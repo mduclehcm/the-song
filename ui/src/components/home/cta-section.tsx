@@ -1,23 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
-import SoundWarningModal from "./sound-warning-modal";
 
 export default function CtaSection() {
   const navigate = useNavigate();
-  const [showWarning, setShowWarning] = useState(false);
-
-  const handleButtonClick = () => {
-    setShowWarning(true);
-  };
-
-  const handleConfirm = () => {
-    navigate("/editor");
-  };
-
-  const handleCancel = () => {
-    setShowWarning(false);
-  };
 
   return (
     <section>
@@ -25,15 +10,10 @@ export default function CtaSection() {
         className="w-full"
         variant="terminal"
         size="cta"
-        onClick={handleButtonClick}
+        onClick={() => navigate("/editor")}
       >
         + START COMPOSING
       </Button>
-      <SoundWarningModal
-        isOpen={showWarning}
-        onConfirm={handleConfirm}
-        onCancel={handleCancel}
-      />
     </section>
   );
 }

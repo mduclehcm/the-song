@@ -2,14 +2,14 @@ use axum::extract::ws::Message;
 use tokio::time::{interval, Duration};
 
 use crate::{
-    dto::{ServerMessage, ServerMousePositionsMessage, ServerStatsMessage},
+    dto::{create_mouse_positions_message, create_stats_message, encode_server_message},
     state::AppState,
 };
 
 /// Global task that broadcasts server stats to all connected clients
 pub async fn global_stats_broadcast_task(state: AppState) {
     let mut interval = interval(Duration::from_millis(1000));
-
+    let mut last_server_stat = None;
     loop {
         interval.tick().await;
 
@@ -20,19 +20,15 @@ pub async fn global_stats_broadcast_task(state: AppState) {
         }
 
         let server_stats = state.get_server_stats();
-        let response = ServerMessage::Stats(ServerStatsMessage {
-            stats: server_stats,
-        });
-
-        match serde_json::to_string(&response) {
-            Ok(json) => {
-                state.broadcast(Message::Text(json.into())).await;
-                tracing::trace!("Broadcasted stats to {} connections", connection_count);
-            }
-            Err(e) => {
-                tracing::error!("Failed to serialize stats: {}", e);
-            }
+        if last_server_stat == Some(server_stats) {
+            continue;
         }
+        last_server_stat = Some(server_stats);
+        let response = create_stats_message(server_stats.online_users as u32);
+        let bytes = encode_server_message(&response);
+
+        state.broadcast(Message::Binary(bytes.into())).await;
+        tracing::trace!("Broadcasted stats to {} connections", connection_count);
     }
 }
 
@@ -49,20 +45,13 @@ pub async fn global_mouse_broadcast_task(state: AppState) {
         }
 
         let positions_count = positions.keys().len();
+        let response = create_mouse_positions_message(positions);
+        let bytes = encode_server_message(&response);
 
-        let response = ServerMessage::MousePositions(ServerMousePositionsMessage { positions });
-
-        match serde_json::to_string(&response) {
-            Ok(json) => {
-                state.broadcast(Message::Text(json.into())).await;
-                tracing::trace!(
-                    "Broadcasted {} mouse positions to all connections",
-                    positions_count
-                );
-            }
-            Err(e) => {
-                tracing::error!("Failed to serialize mouse positions: {}", e);
-            }
-        }
+        state.broadcast(Message::Binary(bytes.into())).await;
+        tracing::trace!(
+            "Broadcasted {} mouse positions to all connections",
+            positions_count
+        );
     }
 }

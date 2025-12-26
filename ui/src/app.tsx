@@ -16,13 +16,6 @@ function App() {
     }, WS_CONNECT_DELAY);
   }, [init]);
 
-  useEffect(() => {
-    // preload the editor
-    setTimeout(() => {
-      import("@/pages/editor");
-    }, 100);
-  }, []);
-
   return (
     <BrowserRouter>
       <Suspense

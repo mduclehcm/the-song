@@ -1,5 +1,12 @@
 import { EventEmitter } from "@/lib/event";
 import { WS_URL } from "@/config";
+import {
+  type ClientMessage,
+  ClientMessageSchema,
+  type ServerMessage,
+  ServerMessageSchema,
+} from "@the-song/protocol";
+import { create, toBinary, fromBinary } from "@bufbuild/protobuf";
 
 export type ConnectedEvent = {
   name: "connected";
@@ -13,19 +20,25 @@ export type ReconnectingEvent = {
   name: "reconnecting";
 };
 
-export type MessageEvent = {
+export type BinaryMessageEvent = {
   name: "message";
-  data: string;
+  data: ServerMessage;
+};
+
+export type WaitingEvent = {
+  name: "waiting";
 };
 
 export type WebsocketEvent =
   | ConnectedEvent
   | DisconnectedEvent
   | ReconnectingEvent
-  | MessageEvent;
+  | BinaryMessageEvent
+  | WaitingEvent;
 
 export enum WsStatus {
   Initial = "initial",
+  Waiting = "waiting",
   Connected = "connected",
   Disconnected = "disconnected",
   Connecting = "connecting",
@@ -53,9 +66,11 @@ export class WebSocketClient extends EventEmitter<WebsocketEvent> {
       return;
     }
     this.socket = new WebSocket(this.url);
+    this.socket.binaryType = "arraybuffer"; // Enable binary messages
+
     this.socket.onopen = () => {
-      this.status = WsStatus.Connected;
-      this.emit({ name: "connected" });
+      this.status = WsStatus.Waiting;
+      this.emit({ name: "waiting" });
     };
     this.socket.onclose = (event) => {
       if (this.shouldConnect) {
@@ -81,7 +96,23 @@ export class WebSocketClient extends EventEmitter<WebsocketEvent> {
       this.socket?.close();
     };
     this.socket.onmessage = (event) => {
-      this.emit({ name: "message", data: event.data });
+      // Handle binary messages
+      if (event.data instanceof ArrayBuffer) {
+        try {
+          const bytes = new Uint8Array(event.data);
+          const message = fromBinary(ServerMessageSchema, bytes);
+          if (this.status === WsStatus.Waiting) {
+            this.status = WsStatus.Connected;
+            this.emit({ name: "connected" });
+          }
+          this.emit({ name: "message", data: message });
+        } catch (error) {
+          console.error("[WS] Failed to decode binary message:", error);
+        }
+      } else {
+        // Legacy text message handling (for backwards compatibility during transition)
+        console.warn("[WS] Received text message, expected binary");
+      }
     };
   }
 
@@ -95,8 +126,40 @@ export class WebSocketClient extends EventEmitter<WebsocketEvent> {
     this.emit({ name: "disconnected" });
   }
 
-  send(message: string) {
-    this.socket?.send(message);
+  /**
+   * Send a binary protobuf message
+   */
+  send(message: ClientMessage) {
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      const bytes = toBinary(ClientMessageSchema, message);
+      this.socket.send(bytes);
+    }
+  }
+
+  /**
+   * Helper to create and send a mouse update message
+   */
+  sendMouseUpdate(x: number, y: number, vx: number, vy: number) {
+    const message = create(ClientMessageSchema, {
+      payload: {
+        case: "mouseUpdate",
+        value: { x, y, vx, vy },
+      },
+    });
+    this.send(message);
+  }
+
+  /**
+   * Helper to create and send a synthesizer update message
+   */
+  sendSynthesizerUpdate(data: Uint8Array) {
+    const message = create(ClientMessageSchema, {
+      payload: {
+        case: "synthesizerUpdate",
+        value: { data },
+      },
+    });
+    this.send(message);
   }
 }
 

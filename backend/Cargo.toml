@@ -14,3 +14,5 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 uuid = { version = "1.11", features = ["v7", "serde"] }
 loro = { version = "^1.10", features = ["counter"] }
+prost = "0.13"
+the-song-protocol = { version = "0.1.0", path = "../protocol/rust" }

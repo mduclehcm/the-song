@@ -1,35 +1,33 @@
 import type { StateCreator } from "zustand";
-import { Crdt, type TrackConfig } from "@/lib/crdt";
 import { WS_CLIENT } from "@/lib/websocket";
-import type { ServerMessage } from "@/types/server";
-import type { NoteData } from "@/lib/piano-roll-renderer/types";
+import { Crdt, crdt, type NoteUpdates, type TrackConfig } from "@/lib/crdt";
 import { EDITOR_CONTROLLER } from "@/lib/piano-roll-renderer";
+import type { ServerMessage } from "@the-song/protocol";
 
 export interface SynthesizedSlice {
-  // State
+  // BPM State
   bpm: number;
   activeChannel: number;
   trackConfigs: TrackConfig[];
 
+  // CRDT instance
   crdt: Crdt;
 
-  // Actions
+  // BPM Actions
   incrementBpm: (bpm: number) => void;
   decrementBpm: (bpm: number) => void;
+
+  // Channel Actions
   setActiveChannel: (channelId: number) => void;
   setTrackConfig: (trackIndex: number, config: Partial<TrackConfig>) => void;
 
   // Notes Actions
-  updateNote: (
-    noteId: string,
-    updates: Partial<
-      Omit<NoteData, "id" | "createdAt" | "createdBy" | "trackIndex">
-    >
-  ) => void;
+  updateNote: (noteId: string, updates: NoteUpdates) => void;
   deleteNote: (noteId: string) => void;
 }
 
-export const crdt = new Crdt();
+// Re-export crdt for backwards compatibility
+export { crdt };
 
 export const createSynthesizedSlice: StateCreator<
   SynthesizedSlice,
@@ -48,29 +46,31 @@ export const createSynthesizedSlice: StateCreator<
     set({ trackConfigs });
   });
 
+  // Send CRDT updates via binary protobuf
   crdt.on("commit", (event) => {
-    WS_CLIENT.send(
-      JSON.stringify({
-        kind: "SynthesizerUpdate",
-        data: { data: Array.from(event.data) },
-      })
-    );
+    WS_CLIENT.sendSynthesizerUpdate(event.data);
   });
 
-  // Subscribe to message events
+  // Subscribe to message events (binary protobuf messages)
   WS_CLIENT.on("message", (event) => {
     if (event.name !== "message") {
       return;
     }
-    try {
-      const message: ServerMessage = JSON.parse(event.data);
-      if (message.kind === "Welcome") {
-        crdt.import(message.data.synthesizer_snapshot);
-      } else if (message.kind === "SynthesizerUpdate") {
-        crdt.import(message.data.data);
-      }
-    } catch (error) {
-      console.error("[Store] Failed to parse server message:", error);
+
+    const message: ServerMessage = event.data;
+    const payload = message.payload;
+
+    if (!payload) {
+      return;
+    }
+
+    switch (payload.case) {
+      case "welcome":
+        crdt.import(payload.value.synthesizerSnapshot);
+        break;
+      case "synthesizerUpdate":
+        crdt.import(payload.value.data);
+        break;
     }
   });
 

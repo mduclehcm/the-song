@@ -1,35 +1,34 @@
-import type { ServerStats, MousePositions } from "@/types/data";
+/**
+ * @deprecated Use imports from '@the-song/protocol' directly instead.
+ * This file is kept for backwards compatibility.
+ *
+ * Note: In protobuf-es v2, message types are type-only exports.
+ * Use the Schema exports (e.g., ClientMessageSchema) for runtime operations.
+ */
 
-export interface ServerStatsMessage {
-  kind: "Stats";
-  data: { stats: ServerStats };
-}
+export type {
+  ServerMessage,
+  ClientMessage,
+  ServerWelcome,
+  ServerStatsUpdate,
+  ServerMousePositions,
+  ServerSynthesizerUpdate,
+  ClientMouseUpdate,
+  ClientSynthesizerUpdate,
+  ServerStats,
+  MousePosition,
+} from "@the-song/protocol";
 
-export interface ServerWelcomeMessage {
-  kind: "Welcome";
-  data: { user_id: string; synthesizer_snapshot: Uint8Array };
-}
-
-export interface ServerMousePositionsMessage {
-  kind: "MousePositions";
-  data: { positions: MousePositions };
-}
-
-export interface ServerSynthesizerUpdateMessage {
-  kind: "SynthesizerUpdate";
-  data: { data: Uint8Array };
-}
-
-export interface ClientMouseUpdateMessage {
-  kind: "MouseUpdate";
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-}
-
-export type ServerMessage =
-  | ServerStatsMessage
-  | ServerWelcomeMessage
-  | ServerMousePositionsMessage
-  | ServerSynthesizerUpdateMessage;
+// Re-export schemas for runtime use
+export {
+  ServerMessageSchema,
+  ClientMessageSchema,
+  ServerWelcomeSchema,
+  ServerStatsUpdateSchema,
+  ServerMousePositionsSchema,
+  ServerSynthesizerUpdateSchema,
+  ClientMouseUpdateSchema,
+  ClientSynthesizerUpdateSchema,
+  ServerStatsSchema,
+  MousePositionSchema,
+} from "@the-song/protocol";

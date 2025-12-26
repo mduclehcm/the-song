@@ -65,3 +65,10 @@ export interface ScrollBounds {
   minY: number;
   maxY: number;
 }
+
+export interface RenderBoundary {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}

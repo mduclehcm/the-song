@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package thesong;
+
+// ============================================================================
+// Common Types
+// ============================================================================
+
+// Mouse position for a user
+message MousePosition {
+  float x = 1;
+  float y = 2;
+  bool dirty = 3;
+}
+
+// Server statistics
+message ServerStats {
+  uint32 online_users = 1;
+}
+
+// ============================================================================
+// Client -> Server Messages
+// ============================================================================
+
+// Mouse update from client
+message ClientMouseUpdate {
+  float x = 1;
+  float y = 2;
+  float vx = 3;  // velocity x
+  float vy = 4;  // velocity y
+}
+
+// Synthesizer CRDT update from client
+message ClientSynthesizerUpdate {
+  bytes data = 1;  // loro-crdt encoded data
+}
+
+// Wrapper for all client messages
+message ClientMessage {
+  oneof payload {
+    ClientMouseUpdate mouse_update = 1;
+    ClientSynthesizerUpdate synthesizer_update = 2;
+  }
+}
+
+// ============================================================================
+// Server -> Client Messages
+// ============================================================================
+
+// Welcome message sent when client connects
+message ServerWelcome {
+  string user_id = 1;  // UUID as string
+  bytes synthesizer_snapshot = 2;  // loro-crdt snapshot
+  ServerStats stats = 3;
+}
+
+// Server stats broadcast
+message ServerStatsUpdate {
+  ServerStats stats = 1;
+}
+
+// Mouse positions for all users
+message ServerMousePositions {
+  map<string, MousePosition> positions = 1;  // user_id -> position
+}
+
+// Synthesizer update broadcast
+message ServerSynthesizerUpdate {
+  bytes data = 1;  // loro-crdt encoded data
+}
+
+// Wrapper for all server messages
+message ServerMessage {
+  oneof payload {
+    ServerWelcome welcome = 1;
+    ServerStatsUpdate stats = 2;
+    ServerMousePositions mouse_positions = 3;
+    ServerSynthesizerUpdate synthesizer_update = 4;
+  }
+}
+

@@ -1,19 +1,18 @@
 use axum::extract::ws::Message;
-use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{
-    atomic::{AtomicU64, Ordering},
+    atomic::{AtomicU32, Ordering},
     Arc,
 };
 use tokio::sync::{mpsc::UnboundedSender, RwLock};
 use uuid::Uuid;
 
 pub struct ServerStats {
-    online_users: AtomicU64,
+    online_users: AtomicU32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct MousePosition {
     pub x: f32,
     pub y: f32,
@@ -28,20 +27,15 @@ pub struct ConnectionRegistry {
     connections: RwLock<HashMap<Uuid, UnboundedSender<Message>>>,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Clone)]
-pub struct ServerStatsSnapshot {
-    online_users: u64,
-}
-
 impl ServerStats {
     pub fn new() -> Self {
         Self {
-            online_users: AtomicU64::new(0),
+            online_users: AtomicU32::new(0),
         }
     }
 
-    pub fn get_snapshot(&self) -> ServerStatsSnapshot {
-        ServerStatsSnapshot {
+    pub fn get_snapshot(&self) -> the_song_protocol::ServerStats {
+        the_song_protocol::ServerStats {
             online_users: self.online_users.load(Ordering::SeqCst),
         }
     }
@@ -169,7 +163,7 @@ impl AppState {
         self.stats.online_users.fetch_sub(1, Ordering::SeqCst);
     }
 
-    pub fn get_server_stats(&self) -> ServerStatsSnapshot {
+    pub fn get_server_stats(&self) -> the_song_protocol::ServerStats {
         self.stats.get_snapshot()
     }
 
@@ -183,13 +177,10 @@ impl AppState {
             return;
         }
 
-        // Broadcast update to all connected clients
-        let msg = crate::dto::ServerMessage::SynthesizerUpdate(
-            crate::dto::ServerSynthesizerUpdateMessage { data: update },
-        );
-        if let Ok(json) = serde_json::to_string(&msg) {
-            self.broadcast(Message::Text(json.into())).await;
-        }
+        // Broadcast update to all connected clients (binary format)
+        let msg = crate::dto::create_synthesizer_update_message(update);
+        let bytes = crate::dto::encode_server_message(&msg);
+        self.broadcast(Message::Binary(bytes.into())).await;
     }
 
     pub async fn update_mouse(&self, user_id: Uuid, x: f32, y: f32, vx: f32, vy: f32) {

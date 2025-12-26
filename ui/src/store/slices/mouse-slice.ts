@@ -1,7 +1,6 @@
 import type { StateCreator } from "zustand";
 import { WS_CLIENT } from "@/lib/websocket";
 import type { MousePositions } from "@/types/data";
-import type { ClientMouseUpdateMessage } from "@/types/server";
 import type { WebSocketSlice } from "./websocket-slice";
 
 export interface MouseSlice {
@@ -39,13 +38,7 @@ export const createMouseSlice: StateCreator<
     if (currentStatus !== "connected") {
       return;
     }
-    const message: ClientMouseUpdateMessage = {
-      kind: "MouseUpdate",
-      x,
-      y,
-      vx,
-      vy,
-    };
-    WS_CLIENT.send(JSON.stringify(message));
+    // Use the new binary message helper
+    WS_CLIENT.sendMouseUpdate(x, y, vx, vy);
   },
 });

@@ -1,8 +1,7 @@
 import { LoroCounter, LoroDoc, LoroList, LoroMap } from "loro-crdt";
 
-import { THROTTLE_COMMIT_DELAY, MIN_BPM, MAX_BPM } from "@/config";
+import { MIN_BPM, MAX_BPM } from "@/config";
 import { EventEmitter } from "@/lib/event";
-import { throttle } from "@/lib/utils";
 import type {
   NoteData,
   NotesMap,
@@ -38,6 +37,11 @@ export interface TrackConfig {
   // Future attributes can be added here
 }
 
+// Type for note updates (excludes immutable fields)
+export type NoteUpdates = Partial<
+  Omit<NoteData, "id" | "createdAt" | "createdBy" | "trackIndex">
+>;
+
 export type CommitEvent = {
   name: "commit";
   data: Uint8Array;
@@ -64,11 +68,6 @@ export class Crdt extends EventEmitter<CommitEvent> {
     this.tracks = this.doc.getList("tracks");
     this.trackConfigs = this.doc.getList("trackConfigs");
 
-    this.commitThrottled = throttle(
-      this.commitThrottled.bind(this),
-      THROTTLE_COMMIT_DELAY
-    );
-
     // Subscribe to notes changes
     this.notes.subscribe(() => {
       this.notifyChange();
@@ -87,6 +86,10 @@ export class Crdt extends EventEmitter<CommitEvent> {
     // Subscribe to BPM changes
     this.bpm.subscribe(() => {
       this.notifyBpmChange();
+    });
+
+    this.doc.subscribeLocalUpdates((updates) => {
+      this.emit({ name: "commit", data: updates });
     });
   }
 
@@ -426,10 +429,8 @@ export class Crdt extends EventEmitter<CommitEvent> {
 
   private commit() {
     this.doc.commit();
-    this.commitThrottled();
-  }
-
-  private commitThrottled() {
-    this.emit({ name: "commit", data: this.doc.export({ mode: "update" }) });
   }
 }
+
+// Singleton CRDT instance - exported here to avoid circular dependencies
+export const crdt = new Crdt();

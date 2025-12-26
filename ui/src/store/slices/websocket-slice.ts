@@ -1,6 +1,5 @@
 import type { StateCreator } from "zustand";
 import { WS_CLIENT, WsStatus } from "@/lib/websocket";
-import type { ServerMessage } from "@/types/server";
 
 export interface WebSocketSlice {
   // State
@@ -9,7 +8,6 @@ export interface WebSocketSlice {
   // Actions
   init: () => void;
   disconnect: () => void;
-  send: (message: string) => void;
   setStatus: (status: WsStatus) => void;
 }
 
@@ -43,31 +41,6 @@ const setupWebSocketSubscriptions = (set: StoreSetFunction) => {
   WS_CLIENT.on("reconnecting", () => {
     console.log("[Store] WebSocket reconnecting");
     set({ status: WsStatus.Reconnecting });
-  });
-
-  // Subscribe to message events
-  WS_CLIENT.on("message", (event) => {
-    if (event.name !== "message") {
-      return;
-    }
-    try {
-      const message: ServerMessage = JSON.parse(event.data);
-      if (message.kind === "Stats") {
-        set({ serverStats: message.data.stats });
-      } else if (message.kind === "Welcome") {
-        console.log("[Store] Received user ID:", message.data.user_id);
-        set({ userId: message.data.user_id });
-      } else if (message.kind === "MousePositions") {
-        set((state: any) => ({
-          mousePositions: {
-            ...state.mousePositions,
-            ...message.data.positions,
-          },
-        }));
-      }
-    } catch (error) {
-      console.error("[Store] Failed to parse server message:", error);
-    }
   });
 };
 
@@ -105,14 +78,5 @@ export const createWebSocketSlice: StateCreator<
   disconnect: () => {
     console.log("[Store] Disconnecting WebSocket");
     WS_CLIENT.disconnect();
-  },
-
-  send: (message: string) => {
-    const currentStatus = get().status;
-    if (currentStatus !== "connected") {
-      console.warn("[Store] Cannot send message - not connected");
-      return;
-    }
-    WS_CLIENT.send(message);
   },
 });

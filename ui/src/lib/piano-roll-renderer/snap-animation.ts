@@ -10,13 +10,16 @@ export interface SnapAnimationState {
   snapStartTime: number;
 }
 
-export function createSnapAnimationState(): SnapAnimationState {
+export function createSnapAnimationState(
+  snapTargetX: number,
+  snapTargetY: number
+): SnapAnimationState {
   return {
     isSnapping: false,
     snapStartX: 0,
     snapStartY: 0,
-    snapTargetX: 0,
-    snapTargetY: 0,
+    snapTargetX,
+    snapTargetY,
     snapProgress: 0,
     snapStartTime: 0,
   };

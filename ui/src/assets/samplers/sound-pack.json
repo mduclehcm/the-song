@@ -1,0 +1,208 @@
+{
+  "drum-loops": [
+    "deluxe-lofi-percussion-loop-75-bpm.wav",
+    "dreams-hihat-loop-1-78-bpm.wav",
+    "dreams-hihat-loop-2-80-bpm.wav",
+    "dreams-shaker-loop-1-70-bpm.wav",
+    "dreams-shaker-loop-2-76-bpm.wav",
+    "dreams-shaker-loop-3-76-bpm.wav",
+    "eternity-percussion-loop-1-80-bpm.wav",
+    "eternity-percussion-loop-2-80-bpm.wav",
+    "lofi-full-drum-loop-1-70-bpm.wav",
+    "lofi-full-drum-loop-2-80-bpm.wav",
+    "lofi-full-drum-loop-3-90-bpm.wav",
+    "tight-shaker-loop-91-bpm.wav",
+    "timeless-full-drum-loop-170-bpm.wav"
+  ],
+  "snares-rimshots": [
+    "classic-boombap-snare-d.wav",
+    "deluxe-lofi-snare-c.wav",
+    "downsample-snare-a.wav",
+    "dreams-lofi-snare-1.wav",
+    "dreams-lofi-snare-2.wav",
+    "dreams-lofi-snare-3.wav",
+    "dreams-lofi-snare-4.wav",
+    "dreams-rimshot.wav",
+    "eternity-rimshot-1.wav",
+    "eternity-rimshot-2.wav",
+    "eternity-snare-d.wav",
+    "micro-snare-g.wav",
+    "small-snare-f.wav",
+    "tubetech-rimshot.wav"
+  ],
+  "hihats-open": [
+    "cassette-open-hihat.wav",
+    "eternity-open-hihat-1.wav",
+    "eternity-open-hihat-2.wav",
+    "eternity-open-hihat-3.wav",
+    "leaves-open-hihat.wav"
+  ],
+  "one-shots": [
+    "cartoon-bell-one-shot-c.wav",
+    "frozen-keys-one-shot-c.wav",
+    "grandmother-keys-one-shot-c.wav",
+    "kalimba-tape-one-shot-c.wav",
+    "lofi-guitar-one-shot-c.wav",
+    "subtle-pad-one-shot-c.wav",
+    "vintage-pad-one-shot-c.wav",
+    "wisdom-pluck-one-shot-c.wav"
+  ],
+  "snaps": [
+    "deluxe-lofi-snap-1.wav",
+    "deluxe-lofi-snap-2.wav",
+    "dreams-solo-snap.wav",
+    "eternity-snap.wav",
+    "tape-snap.wav",
+    "wet-snap.wav"
+  ],
+  "bass": [
+    "deluxe-lofi-bass-guitar-a.wav",
+    "dreams-808-1-c.wav",
+    "dreams-808-2-c.wav",
+    "dreams-bass-guitar-shot-1-e.wav",
+    "dreams-bass-guitar-shot-2-b.wav",
+    "dreams-synth-bass-e.wav",
+    "eternity-808-e.wav",
+    "eternity-bass-guitar-c.wav"
+  ],
+  "percussion": [
+    "button-pop-perc.wav",
+    "deluxe-lofi-percussion-1.wav",
+    "deluxe-lofi-percussion-2.wav",
+    "eternity-percussion-1.wav",
+    "eternity-percussion-2.wav",
+    "eternity-percussion-3.wav",
+    "facetime-perc.wav",
+    "lofi-percussion.wav",
+    "mini-perc.wav",
+    "promenade-perc.wav"
+  ],
+  "melodies": [
+    "bordeaux-80-bpm-c-min.wav",
+    "bubbles-92-bpm-c-maj.wav",
+    "deluxe-lofi-synth-melody-70-bpm-g-maj.wav",
+    "dreamscape-80-bpm-d-min.wav",
+    "eternity-e-piano-1-80-bpm-d-maj.wav",
+    "eternity-e-piano-2-82-bpm-b-min.wav",
+    "eternity-lofi-melody-loop-1-75-bpm-g-min.wav",
+    "eternity-lofi-melody-loop-2-90-bpm-c-maj.wav",
+    "forever-63-bpm-f-min.wav",
+    "imagination-76-bpm-a-min.wav",
+    "lofi-expansion-melody-1-70-bpm-d-min.wav",
+    "lofi-expansion-melody-2-75-bpm-d-min.wav",
+    "misty-eyed-76-bpm-a-min.wav",
+    "mountains-76-bpm-e-maj.wav",
+    "summer-daze-74-bpm-c-min.wav",
+    "winter-bliss-78-bpm-g-min.wav"
+  ],
+  "melodies/loop-stems": [],
+  "melodies/loop-stems/bordeaux-80-bpm-c-min": [
+    "bordeaux-80-bpm-c-min-bass.wav",
+    "bordeaux-80-bpm-c-min-lofi-guitar.wav",
+    "bordeaux-80-bpm-c-min-old-rhodes.wav",
+    "bordeaux-80-bpm-c-min-wisdom-pluck.wav",
+    "bordeaux-80-bpm-c-min.mid"
+  ],
+  "melodies/loop-stems/dreamscape-80-bpm-d-min": [
+    "dreamscape-80-bpm-d-min-ambience.wav",
+    "dreamscape-80-bpm-d-min-bass.wav",
+    "dreamscape-80-bpm-d-min-guitar.wav"
+  ],
+  "melodies/loop-stems/eternity-lofi-melody-loop-1-75-bpm-g-min": [
+    "eternity-lofi-melody-loop-1-75-bpm-g-min-keys.wav",
+    "eternity-lofi-melody-loop-1-75-bpm-g-min-pluck.wav"
+  ],
+  "melodies/loop-stems/mountains-76-bpm-e-maj-stems": [
+    "mountains-76-bpm-e-maj-bass.wav",
+    "mountains-76-bpm-e-maj-guitar.wav",
+    "mountains-76-bpm-e-maj-keys.wav"
+  ],
+  "melodies/loop-stems/imagination-76-bpm-a-min": [
+    "imagination-76-bpm-a-min-bass.wav",
+    "imagination-76-bpm-a-min-keys-1.wav",
+    "imagination-76-bpm-a-min-keys-2.wav",
+    "imagination-76-bpm-a-min.mid"
+  ],
+  "melodies/loop-stems/misty-eyed-76-bpm-a-min": [
+    "misty-eyed-76-bpm-a-min-bass.wav",
+    "misty-eyed-76-bpm-a-min-synth-keys.wav",
+    "misty-eyed-76-bpm-a-min.mid"
+  ],
+  "melodies/loop-stems/eternity-lofi-melody-loop-2-90-bpm-c-maj": [
+    "eternity-lofi-melody-loop-2-90-bpm-c-maj-guitar.wav",
+    "eternity-lofi-melody-loop-2-90-bpm-c-maj-lead.wav",
+    "eternity-lofi-melody-loop-2-90-bpm-c-maj-pluck.wav"
+  ],
+  "melodies/loop-stems/winter-bliss-78-bpm-g-min": [
+    "winter-bliss-78-bpm-g-min-bass.wav",
+    "winter-bliss-78-bpm-g-min-e-piano.wav",
+    "winter-bliss-78-bpm-g-min-vocal.wav",
+    "winter-bliss-78-bpm-g-min.mid"
+  ],
+  "melodies/loop-stems/summer-daze-74-bpm-c-min": [
+    "summer-daze-74-bpm-c-min-bass.wav",
+    "summer-daze-74-bpm-c-min-flute.wav",
+    "summer-daze-74-bpm-c-min-synth.wav",
+    "summer-daze-74-bpm-c-min.mid"
+  ],
+  "claps": [
+    "deluxe-lofi-clap.wav",
+    "dreams-lofi-clap-1.wav",
+    "dreams-lofi-clap-2.wav",
+    "dreams-lofi-clap-3.wav",
+    "dreams-lofi-clap-4.wav",
+    "nineties-clap.wav",
+    "old-clap.wav",
+    "tape-clap.wav"
+  ],
+  "noise": [
+    "destroyed-crackled-noise.wav",
+    "eternity-real-life-recording-rain.wav",
+    "eternity-vinyl-noise-1.wav",
+    "eternity-vinyl-noise-2.wav",
+    "life-birds-chirping.wav",
+    "life-fire.wav",
+    "life-rain-medium.wav",
+    "life-thunder-close.wav",
+    "life-waves-light.wav",
+    "tape-broken-noise.wav",
+    "tape-deep-noise.wav"
+  ],
+  "hihats-closed": [
+    "chrome-hihat.wav",
+    "deluxe-lofi-closed-hihat.wav",
+    "downgrade-tick-hihat.wav",
+    "eternity-closed-hihat.wav",
+    "lofi-closed-hihat.wav",
+    "tooth-hihat.wav"
+  ],
+  "guitars": [
+    "deluxe-lofi-guitar-loop-80-bpm-d-maj.wav",
+    "dreams-of-then-guitar-loop-82-bpm-e-maj.wav",
+    "dusk-acoustic-guitar-loop-80-bpm-c-maj.wav",
+    "eternity-acoustic-guitar-loop-1-85-bpm-b-min-dry.wav",
+    "eternity-acoustic-guitar-loop-1-85-bpm-b-min-wet.wav",
+    "eternity-acoustic-guitar-loop-2-90-bpm-d-min-dry.wav",
+    "eternity-acoustic-guitar-loop-2-90-bpm-d-min-wet.wav",
+    "eternity-electric-guitar-80-bpm-e-min-dry.wav",
+    "eternity-electric-guitar-80-bpm-e-min-wet.wav",
+    "hawaii-sunsets-75-bpm-f-min.wav"
+  ],
+  "shakers": [
+    "double-studio-shaker.wav",
+    "dreams-studio-shaker.wav",
+    "lofi-shaker.wav",
+    "motion-shaker.wav",
+    "short-shaker.wav",
+    "vypr-yellow-shaker-one-shot.wav"
+  ],
+  "kicks": [
+    "bourbon-kick-d.wav",
+    "dreams-lofi-kick-1-c.wav",
+    "dreams-lofi-kick-2-c.wav",
+    "eternity-kick-c.wav",
+    "milk-kick-f.wav",
+    "smooth-water-kick-c.wav",
+    "yummy-kick-f.wav"
+  ]
+}

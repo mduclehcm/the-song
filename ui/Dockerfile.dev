@@ -16,3 +16,4 @@ EXPOSE 5173
 # Default command (can be overridden in docker-compose)
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 
+

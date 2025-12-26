@@ -9,7 +9,7 @@ use futures::{SinkExt, StreamExt};
 use uuid::Uuid;
 
 use crate::{
-    dto::{ClientMessage, ServerMessage, ServerWelcomeMessage},
+    dto::{client_message, create_welcome_message, decode_client_message, encode_server_message},
     state::AppState,
 };
 
@@ -35,13 +35,13 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         return;
     };
 
-    // Send welcome message with user ID
-    let welcome_msg: ServerMessage =
-        ServerMessage::Welcome(ServerWelcomeMessage::new(user_id, synthesizer_snapshot));
+    // Send welcome message with user ID (binary format)
+    let welcome_msg =
+        create_welcome_message(user_id, state.get_server_stats(), synthesizer_snapshot);
+    let welcome_bytes = encode_server_message(&welcome_msg);
 
-    let welcome_json = serde_json::to_string(&welcome_msg).unwrap();
     if sender
-        .send(Message::Text(welcome_json.into()))
+        .send(Message::Binary(welcome_bytes.into()))
         .await
         .is_err()
     {
@@ -74,25 +74,39 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     // Handle incoming messages from the client
     while let Some(msg) = receiver.next().await {
         match msg {
-            Ok(Message::Text(text)) => {
-                // Parse incoming message
-                if let Ok(msg) = serde_json::from_str::<ClientMessage>(&text) {
-                    match msg {
-                        ClientMessage::MouseUpdate(mouse_msg) => {
-                            // state
-                            //     .update_mouse(user_id, mouse_msg.x, mouse_msg.y, mouse_msg.vx, mouse_msg.vy)
-                            //     .await;
+            Ok(Message::Binary(data)) => {
+                // Parse binary protobuf message
+                match decode_client_message(&data) {
+                    Ok(client_msg) => match client_msg.payload {
+                        Some(client_message::Payload::MouseUpdate(mouse_update)) => {
+                            state
+                                .update_mouse(
+                                    user_id,
+                                    mouse_update.x,
+                                    mouse_update.y,
+                                    mouse_update.vx,
+                                    mouse_update.vy,
+                                )
+                                .await;
                         }
-                        ClientMessage::SynthesizerUpdate(synthesizer_msg) => {
-                            state.apply_synthesizer_update(synthesizer_msg.data).await;
+                        Some(client_message::Payload::SynthesizerUpdate(synth_update)) => {
+                            state.apply_synthesizer_update(synth_update.data).await;
                         }
+                        None => {
+                            tracing::warn!("Received client message with no payload");
+                        }
+                    },
+                    Err(e) => {
+                        tracing::error!("Failed to decode client message: {}", e);
                     }
-                } else {
-                    tracing::error!("Failed to parse client message: {}", text);
                 }
             }
-            Ok(Message::Binary(_data)) => {
-                // Do nothing
+            Ok(Message::Text(_text)) => {
+                // Legacy text messages - log warning
+                tracing::warn!(
+                    "Received text message from {}, expected binary. Ignoring.",
+                    user_id
+                );
             }
             Ok(Message::Ping(_)) => {
                 // Axum handles pings automatically

@@ -33,27 +33,13 @@ export const useWebSocketActions = () =>
     useShallow((state) => ({
       init: state.init,
       disconnect: state.disconnect,
-      send: state.send,
     }))
   );
 
 export const useUserId = () => useStore((state) => state.userId);
-export const useUserActions = () =>
-  useStore(
-    useShallow((state) => ({
-      setUserId: state.setUserId,
-      clearUserId: state.clearUserId,
-    }))
-  );
 export const getUserId = () => useStore.getState().userId;
 
 export const useServerStats = () => useStore((state) => state.serverStats);
-export const useServerActions = () =>
-  useStore(
-    useShallow((state) => ({
-      setServerStats: state.setServerStats,
-    }))
-  );
 
 export const useMousePositions = () =>
   useStore((state) => state.mousePositions);
